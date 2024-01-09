@@ -77,7 +77,7 @@ protected[pit] case class PITJoinExec(
       // TODO: This should be improved, but for now just keep everything in one partition
       AllTuples :: AllTuples :: Nil
     } else {
-      ClusteredDistribution(leftEquiKeys) :: ClusteredDistribution(
+      HashClusteredDistribution(leftEquiKeys) :: HashClusteredDistribution(
         rightEquiKeys
       ) :: Nil
     }
