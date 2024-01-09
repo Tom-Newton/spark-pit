@@ -31,10 +31,9 @@ import org.apache.spark.sql.catalyst.expressions.{
   ExpressionSet,
   PredicateHelper
 }
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, LogicalPlan}
 import org.apache.spark.sql.types.BooleanType
-import org.apache.spark.sql.catalyst.trees.BinaryLike
-trait BinaryNode extends LogicalPlan with BinaryLike[LogicalPlan]
+
 protected[pit] sealed abstract class CustomJoinType {
   def sql: String
 }
