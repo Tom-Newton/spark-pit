@@ -34,7 +34,7 @@ import org.apache.spark.sql.types.{
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 
 class SmallData(spark: SparkSession) {
-  private val DATA_RAW = Seq(
+  val DATA_RAW = Seq(
     Seq(
       Row(1, 4, "1z"),
       Row(1, 5, "1x"),
@@ -57,7 +57,7 @@ class SmallData(spark: SparkSession) {
       Row(1, 10, "f3-1-10")
     )
   )
-  private val schema: StructType = StructType(
+  val schema: StructType = StructType(
     Seq(
       StructField("id", IntegerType, nullable = false),
       StructField("ts", IntegerType, nullable = false),

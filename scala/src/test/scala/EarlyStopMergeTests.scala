@@ -26,8 +26,9 @@ package io.github.ackuq.pit
 
 import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
 import org.apache.spark.sql.functions.lit
+import org.apache.spark.sql.types.StructType
 import org.scalatest.flatspec.AnyFlatSpec
-
+import org.apache.spark.sql.DataFrame
 import EarlyStopSortMerge.pit
 import data.SmallDataSortMerge
 
@@ -49,47 +50,130 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     }
   }
 
-  testBothCodegenAndInterpreted(
-    "Perform a PIT join with two dataframes, aligned timestamps"
-  ) {
+  def testJoinWithAlignedTimestamps(
+      joinType: String,
+      expectedSchema: StructType,
+      tolerance: Int
+  ): Unit = {
     val fg1 = smallData.fg1
     val fg2 = smallData.fg2
 
     val pitJoin =
       fg1.join(
         fg2,
-        pit(fg1("ts"), fg2("ts"), lit(0)) && fg1("id") === fg2("id")
+        pit(fg1("ts"), fg2("ts"), lit(tolerance)) && fg1("id") === fg2("id"),
+        joinType
       )
 
     assert(!pitJoin.isEmpty)
-    // Assert same schema
-    assert(pitJoin.schema.equals(smallData.PIT_1_2.schema))
-    // Assert same elements
+    assert(pitJoin.schema.equals(expectedSchema))
     assert(pitJoin.collect().sameElements(smallData.PIT_1_2.collect()))
   }
 
   testBothCodegenAndInterpreted(
-    "Perform a PIT join with two dataframes, misaligned timestamps"
+    "inner_join_with_aligned_timestamps_no_tolerance"
   ) {
-    val fg1 = smallData.fg1
-    val fg2 = smallData.fg3
-
-    val pitJoin =
-      fg1.join(
-        fg2,
-        pit(fg1("ts"), fg2("ts"), lit(0)) && fg1("id") === fg2("id")
-      )
-
-    assert(!pitJoin.isEmpty)
-    // Assert same schema
-    assert(pitJoin.schema.equals(smallData.PIT_1_3.schema))
-    // Assert same elements
-    assert(pitJoin.collect().sameElements(smallData.PIT_1_3.collect()))
+    testJoinWithAlignedTimestamps("inner", smallData.PIT_2_schema, 0)
   }
 
   testBothCodegenAndInterpreted(
-    "Perform a PIT join with three dataframes, misaligned timestamps"
+    "left_join_with_aligned_timestamps_no_tolerance"
   ) {
+    testJoinWithAlignedTimestamps("left", smallData.PIT_2_OUTER_schema, 0)
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_with_aligned_timestamps_with_tolerance"
+  ) {
+    testJoinWithAlignedTimestamps("inner", smallData.PIT_2_schema, 1)
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_with_aligned_timestamps_with_tolerance"
+  ) {
+    testJoinWithAlignedTimestamps("left", smallData.PIT_2_OUTER_schema, 1)
+  }
+
+  def testSearchingBackwardForMatches(
+      joinType: String,
+      leftDataFrame: DataFrame,
+      rightDataFrame: DataFrame,
+      expectedDataFrame: DataFrame,
+      expectedSchema: StructType,
+      tolerance: Int
+  ): Unit = {
+    val pitJoin =
+      leftDataFrame.join(
+        rightDataFrame,
+        pit(
+          leftDataFrame("ts"),
+          rightDataFrame("ts"),
+          lit(tolerance)
+        ) && leftDataFrame("id") === rightDataFrame("id"),
+        joinType
+      )
+
+    assert(!pitJoin.isEmpty)
+    assert(pitJoin.schema.equals(expectedSchema))
+    assert(pitJoin.collect().sameElements(expectedDataFrame.collect()))
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_searching_backward_for_matches_no_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1,
+      smallData.fg3,
+      smallData.PIT_1_3,
+      smallData.PIT_2_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_searching_backward_for_matches_no_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg1,
+      smallData.fg3,
+      smallData.PIT_1_3,
+      smallData.PIT_2_OUTER_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_searching_backward_for_matches_with_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1,
+      smallData.fg3,
+      smallData.PIT_1_3_T1,
+      smallData.PIT_2_schema,
+      1
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_searching_backward_for_matches_with_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg1,
+      smallData.fg3,
+      smallData.PIT_1_3_T1_OUTER,
+      smallData.PIT_2_OUTER_schema,
+      1
+    )
+  }
+
+  def testJoiningThreeDataframes(
+      joinType: String,
+      expectedSchema: StructType
+  ): Unit = {
     val fg1 = smallData.fg1
     val fg2 = smallData.fg2
     val fg3 = smallData.fg3
@@ -97,54 +181,26 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     val left =
       fg1.join(
         fg2,
-        pit(fg1("ts"), fg2("ts"), lit(0)) && fg1("id") === fg2("id")
+        pit(fg1("ts"), fg2("ts"), lit(0)) && fg1("id") === fg2("id"),
+        joinType
       )
 
     val pitJoin =
       left.join(
         fg3,
-        pit(fg1("ts"), fg3("ts"), lit(0)) && fg1("id") === fg3("id")
+        pit(fg1("ts"), fg3("ts"), lit(0)) && fg1("id") === fg3("id"),
+        joinType
       )
 
     assert(!pitJoin.isEmpty)
-    // Assert same schema
-    assert(pitJoin.schema.equals(smallData.PIT_1_2_3.schema))
-    // Assert same elements
+    assert(pitJoin.schema.equals(expectedSchema))
     assert(pitJoin.collect().sameElements(smallData.PIT_1_2_3.collect()))
   }
 
-  testBothCodegenAndInterpreted(
-    "Be able to perform a PIT join with tolerance, misaligned timestamps"
-  ) {
-    val fg1 = smallData.fg1
-    val fg2 = smallData.fg3
-
-    val pitJoin = fg1.join(
-      fg2,
-      pit(fg1("ts"), fg2("ts"), lit(1)) && fg1("id") === fg2("id")
-    )
-    assert(!pitJoin.isEmpty)
-    // Assert same schema
-    assert(pitJoin.schema.equals(smallData.PIT_1_3_T1.schema))
-    // Assert same elements
-    assert(pitJoin.collect().sameElements(smallData.PIT_1_3_T1.collect()))
+  testBothCodegenAndInterpreted("inner_join_three_dataframes") {
+    testJoiningThreeDataframes("inner", smallData.PIT_3_schema)
   }
-
-  testBothCodegenAndInterpreted(
-    "Be able to perform a left outer PIT join with tolerance, misaligned timestamps"
-  ) {
-    val fg1 = smallData.fg1
-    val fg2 = smallData.fg3
-
-    val pitJoin = fg1.join(
-      fg2,
-      pit(fg1("ts"), fg2("ts"), lit(1)) && fg1("id") === fg2("id"),
-      "left"
-    )
-    assert(!pitJoin.isEmpty)
-    // Assert same schema
-    assert(pitJoin.schema.equals(smallData.PIT_1_3_T1_OUTER.schema))
-    // Assert same elements
-    assert(pitJoin.collect().sameElements(smallData.PIT_1_3_T1_OUTER.collect()))
+  testBothCodegenAndInterpreted("left_join_three_dataframes") {
+    testJoiningThreeDataframes("left", smallData.PIT_3_OUTER_schema)
   }
 }
