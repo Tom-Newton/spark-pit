@@ -24,17 +24,34 @@
 
 package io.github.ackuq.pit
 
-import EarlyStopSortMerge.pit
-import data.SmallDataSortMerge
-
+import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
 import org.apache.spark.sql.functions.lit
 import org.scalatest.flatspec.AnyFlatSpec
+
+import EarlyStopSortMerge.pit
+import data.SmallDataSortMerge
 
 class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
   EarlyStopSortMerge.init(spark)
   val smallData = new SmallDataSortMerge(spark)
 
-  it should "Perform a PIT join with two dataframes, aligned timestamps" in {
+  def testBothCodegenAndInterpreted(name: String)(f: => Unit): Unit = {
+    it should (s"$name with codegen") in {
+      spark.conf.set("spark.sql.codegen.wholeStage", "false")
+      spark.conf.set("spark.sql.codegen.factoryMode", "NO_CODEGEN")
+      f
+    }
+
+    it should (s"$name interpreted") in {
+      spark.conf.set("spark.sql.codegen.wholeStage", "true")
+      spark.conf.set("spark.sql.codegen.factoryMode", "CODEGEN_ONLY")
+      f
+    }
+  }
+
+  testBothCodegenAndInterpreted(
+    "Perform a PIT join with two dataframes, aligned timestamps"
+  ) {
     val fg1 = smallData.fg1
     val fg2 = smallData.fg2
 
@@ -51,7 +68,9 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     assert(pitJoin.collect().sameElements(smallData.PIT_1_2.collect()))
   }
 
-  it should "Perform a PIT join with two dataframes, misaligned timestamps" in {
+  testBothCodegenAndInterpreted(
+    "Perform a PIT join with two dataframes, misaligned timestamps"
+  ) {
     val fg1 = smallData.fg1
     val fg2 = smallData.fg3
 
@@ -68,7 +87,9 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     assert(pitJoin.collect().sameElements(smallData.PIT_1_3.collect()))
   }
 
-  it should "Perform a PIT join with three dataframes, misaligned timestamps" in {
+  testBothCodegenAndInterpreted(
+    "Perform a PIT join with three dataframes, misaligned timestamps"
+  ) {
     val fg1 = smallData.fg1
     val fg2 = smallData.fg2
     val fg3 = smallData.fg3
@@ -92,7 +113,9 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     assert(pitJoin.collect().sameElements(smallData.PIT_1_2_3.collect()))
   }
 
-  it should "Be able to perform a PIT join with tolerance, misaligned timestamps" in {
+  testBothCodegenAndInterpreted(
+    "Be able to perform a PIT join with tolerance, misaligned timestamps"
+  ) {
     val fg1 = smallData.fg1
     val fg2 = smallData.fg3
 
@@ -107,7 +130,9 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     assert(pitJoin.collect().sameElements(smallData.PIT_1_3_T1.collect()))
   }
 
-  it should "Be able to perform a left outer PIT join with tolerance, misaligned timestamps" in {
+  testBothCodegenAndInterpreted(
+    "Be able to perform a left outer PIT join with tolerance, misaligned timestamps"
+  ) {
     val fg1 = smallData.fg1
     val fg2 = smallData.fg3
 
