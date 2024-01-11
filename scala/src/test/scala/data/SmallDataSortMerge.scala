@@ -65,11 +65,22 @@ class SmallDataSortMerge(spark: SparkSession) extends SmallData(spark) {
     Row(1, 10, "f3-1-10", 1, 7, "1y"),
     Row(1, 6, "f3-1-6", 1, 5, null)
   )
+  val PIT_3_1_T1_WITH_NULLS_RAW = Seq(
+    Row(2, 8, null, 2, 8, "2y"),
+    Row(1, 6, "f3-1-6", 1, 5, null)
+  )
   val PIT_3_1_OUTER_RAW = Seq(
     Row(2, 8, "f3-2-8", 2, 8, "2y"),
     Row(2, 2, "f3-2-2", null, null, null),
     Row(1, 10, "f3-1-10", 1, 7, "1y"),
     Row(1, 6, "f3-1-6", 1, 5, "1x"),
+    Row(1, 1, "f3-1-1", null, null, null)
+  )
+  val PIT_3_1_T1_WITH_NULLS_OUTER_RAW = Seq(
+    Row(2, 8, null, 2, 8, "2y"),
+    Row(2, 2, "f3-2-2", null, null, null),
+    Row(1, 10, "f3-1-10", null, null, null),
+    Row(1, 6, "f3-1-6", 1, 5, null),
     Row(1, 1, "f3-1-1", null, null, null)
   )
   val PIT_3_1_WITH_NULLS_OUTER_RAW = Seq(
@@ -198,8 +209,18 @@ class SmallDataSortMerge(spark: SparkSession) extends SmallData(spark) {
     PIT_2_NULLABLE_schema
   )
 
+  val PIT_3_1_T1_WITH_NULLS: DataFrame = spark.createDataFrame(
+    spark.sparkContext.parallelize(PIT_3_1_T1_WITH_NULLS_RAW),
+    PIT_2_NULLABLE_schema
+  )
+
   val PIT_3_1_WITH_NULLS_OUTER: DataFrame = spark.createDataFrame(
     spark.sparkContext.parallelize(PIT_3_1_WITH_NULLS_OUTER_RAW),
+    PIT_2_NULLABLE_OUTER_schema
+  )
+
+  val PIT_3_1_T1_WITH_NULLS_OUTER: DataFrame = spark.createDataFrame(
+    spark.sparkContext.parallelize(PIT_3_1_T1_WITH_NULLS_OUTER_RAW),
     PIT_2_NULLABLE_OUTER_schema
   )
 

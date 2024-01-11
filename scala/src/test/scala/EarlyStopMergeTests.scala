@@ -258,7 +258,7 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     testSearchingBackwardForMatches(
       "inner",
       smallData.empty,
-      smallData.empty2,  // Don't want to test self join
+      smallData.empty2, // Don't want to test self join
       smallData.PIT_EMPTY,
       smallData.PIT_2_schema,
       0
@@ -301,6 +301,32 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
       smallData.PIT_3_1_WITH_NULLS_OUTER,
       smallData.PIT_2_NULLABLE_OUTER_schema,
       0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_preserves_input_nulls_with_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg3_with_nulls,
+      smallData.fg1_with_nulls,
+      smallData.PIT_3_1_T1_WITH_NULLS,
+      smallData.PIT_2_NULLABLE_schema,
+      1
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_preserves_input_nulls_with_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg3_with_nulls,
+      smallData.fg1_with_nulls,
+      smallData.PIT_3_1_T1_WITH_NULLS_OUTER,
+      smallData.PIT_2_NULLABLE_OUTER_schema,
+      1
     )
   }
 
