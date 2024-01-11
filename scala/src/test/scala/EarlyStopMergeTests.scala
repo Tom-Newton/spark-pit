@@ -278,6 +278,32 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     )
   }
 
+  testBothCodegenAndInterpreted(
+    "inner_join_preserves_input_nulls"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg3_with_nulls,
+      smallData.fg1_with_nulls,
+      smallData.PIT_3_1_WITH_NULLS,
+      smallData.PIT_2_NULLABLE_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_preserves_input_nulls"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg3_with_nulls,
+      smallData.fg1_with_nulls,
+      smallData.PIT_3_1_WITH_NULLS_OUTER,
+      smallData.PIT_2_NULLABLE_OUTER_schema,
+      0
+    )
+  }
+
   def testJoiningThreeDataframes(
       joinType: String,
       expectedSchema: StructType
