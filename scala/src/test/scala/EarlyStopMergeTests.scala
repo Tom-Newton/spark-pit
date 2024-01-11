@@ -50,49 +50,6 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     }
   }
 
-  def testJoinWithAlignedTimestamps(
-      joinType: String,
-      expectedSchema: StructType,
-      tolerance: Int
-  ): Unit = {
-    val fg1 = smallData.fg1
-    val fg2 = smallData.fg2
-
-    val pitJoin =
-      fg1.join(
-        fg2,
-        pit(fg1("ts"), fg2("ts"), lit(tolerance)) && fg1("id") === fg2("id"),
-        joinType
-      )
-
-    assert(pitJoin.schema.equals(expectedSchema))
-    assert(pitJoin.collect().sameElements(smallData.PIT_1_2.collect()))
-  }
-
-  testBothCodegenAndInterpreted(
-    "inner_join_with_aligned_timestamps_no_tolerance"
-  ) {
-    testJoinWithAlignedTimestamps("inner", smallData.PIT_2_schema, 0)
-  }
-
-  testBothCodegenAndInterpreted(
-    "left_join_with_aligned_timestamps_no_tolerance"
-  ) {
-    testJoinWithAlignedTimestamps("left", smallData.PIT_2_OUTER_schema, 0)
-  }
-
-  testBothCodegenAndInterpreted(
-    "inner_join_with_aligned_timestamps_with_tolerance"
-  ) {
-    testJoinWithAlignedTimestamps("inner", smallData.PIT_2_schema, 1)
-  }
-
-  testBothCodegenAndInterpreted(
-    "left_join_with_aligned_timestamps_with_tolerance"
-  ) {
-    testJoinWithAlignedTimestamps("left", smallData.PIT_2_OUTER_schema, 1)
-  }
-
   def testSearchingBackwardForMatches(
       joinType: String,
       leftDataFrame: DataFrame,
@@ -120,6 +77,58 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
 
     assert(pitJoin.schema.equals(expectedSchema))
     assert(pitJoin.collect().sameElements(expectedDataFrame.collect()))
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_with_aligned_timestamps_no_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1,
+      smallData.fg2,
+      smallData.PIT_1_2,
+      smallData.PIT_2_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_with_aligned_timestamps_no_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg1,
+      smallData.fg2,
+      smallData.PIT_1_2,
+      smallData.PIT_2_OUTER_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_with_aligned_timestamps_with_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1,
+      smallData.fg2,
+      smallData.PIT_1_2,
+      smallData.PIT_2_schema,
+      1
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_with_aligned_timestamps_with_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg1,
+      smallData.fg2,
+      smallData.PIT_1_2,
+      smallData.PIT_2_OUTER_schema,
+      1
+    )
   }
 
   testBothCodegenAndInterpreted(
