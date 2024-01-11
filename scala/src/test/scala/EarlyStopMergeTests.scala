@@ -58,8 +58,6 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
       expectedSchema: StructType,
       tolerance: Int
   ): Unit = {
-    leftDataFrame.show()
-    rightDataFrame.show()
 
     val pitJoin =
       leftDataFrame.join(
@@ -71,9 +69,6 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
         ) && leftDataFrame("id") === rightDataFrame("id"),
         joinType
       )
-
-    pitJoin.show()
-    expectedDataFrame.show()
 
     assert(pitJoin.schema.equals(expectedSchema))
     assert(pitJoin.collect().sameElements(expectedDataFrame.collect()))
@@ -361,7 +356,6 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
         joinType
       )
 
-    assert(!pitJoin.isEmpty)
     assert(pitJoin.schema.equals(expectedSchema))
     assert(pitJoin.collect().sameElements(smallData.PIT_1_2_3.collect()))
   }
