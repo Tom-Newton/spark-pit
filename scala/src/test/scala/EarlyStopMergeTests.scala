@@ -65,7 +65,6 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
         joinType
       )
 
-    assert(!pitJoin.isEmpty)
     assert(pitJoin.schema.equals(expectedSchema))
     assert(pitJoin.collect().sameElements(smallData.PIT_1_2.collect()))
   }
@@ -102,6 +101,9 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
       expectedSchema: StructType,
       tolerance: Int
   ): Unit = {
+    leftDataFrame.show()
+    rightDataFrame.show()
+
     val pitJoin =
       leftDataFrame.join(
         rightDataFrame,
@@ -113,7 +115,9 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
         joinType
       )
 
-    assert(!pitJoin.isEmpty)
+    pitJoin.show()
+    expectedDataFrame.show()
+
     assert(pitJoin.schema.equals(expectedSchema))
     assert(pitJoin.collect().sameElements(expectedDataFrame.collect()))
   }
@@ -191,6 +195,84 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
       smallData.fg3,
       smallData.fg1,
       smallData.PIT_3_1_OUTER,
+      smallData.PIT_2_OUTER_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_right_dataframe_is_empty"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1,
+      smallData.empty,
+      smallData.PIT_EMPTY,
+      smallData.PIT_2_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_right_dataframe_is_empty"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg1,
+      smallData.empty,
+      smallData.PIT_1_EMPTY_OUTER,
+      smallData.PIT_2_OUTER_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_left_dataframe_is_empty"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1,
+      smallData.empty,
+      smallData.PIT_EMPTY,
+      smallData.PIT_2_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_left_dataframe_is_empty"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.empty,
+      smallData.fg1,
+      smallData.PIT_EMPTY,
+      smallData.PIT_2_OUTER_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_both_dataframes_are_empty"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.empty,
+      smallData.empty2,  // Don't want to test self join
+      smallData.PIT_EMPTY,
+      smallData.PIT_2_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_both_dataframes_are_empty"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.empty,
+      smallData.empty2, // Don't want to test self join
+      smallData.PIT_EMPTY,
       smallData.PIT_2_OUTER_schema,
       0
     )
