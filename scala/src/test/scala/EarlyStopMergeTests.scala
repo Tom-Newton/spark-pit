@@ -36,15 +36,15 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
   val smallData = new SmallDataSortMerge(spark)
 
   def testBothCodegenAndInterpreted(name: String)(f: => Unit): Unit = {
-    it should (s"$name with codegen") in {
-      spark.conf.set("spark.sql.codegen.wholeStage", "false")
-      spark.conf.set("spark.sql.codegen.factoryMode", "NO_CODEGEN")
+    it should (s"codegen__$name") in {
+      spark.conf.set("spark.sql.codegen.wholeStage", "true")
+      spark.conf.set("spark.sql.codegen.factoryMode", "CODEGEN_ONLY")
       f
     }
 
-    it should (s"$name interpreted") in {
-      spark.conf.set("spark.sql.codegen.wholeStage", "true")
-      spark.conf.set("spark.sql.codegen.factoryMode", "CODEGEN_ONLY")
+    it should (s"interpreted__$name") in {
+      spark.conf.set("spark.sql.codegen.wholeStage", "false")
+      spark.conf.set("spark.sql.codegen.factoryMode", "NO_CODEGEN")
       f
     }
   }
