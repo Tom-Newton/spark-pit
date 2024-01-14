@@ -55,6 +55,18 @@ class SmallDataSortMerge(spark: SparkSession) extends SmallData(spark) {
     Row(1, 5, "1x", 1, 1, "f3-1-1"),
     Row(1, 4, "1z", 1, 1, "f3-1-1")
   )
+  val PIT_1_3_DUPLICATES_RAW = Seq(
+    Row(2, 8, "2y", 2, 8, "f3-2-8"),
+    Row(2, 8, "2y", 2, 8, "f3-2-8"),
+    Row(2, 6, "2x", 2, 2, "f3-2-2"),
+    Row(2, 6, "2x", 2, 2, "f3-2-2"),
+    Row(1, 7, "1y", 1, 6, "f3-1-6"),
+    Row(1, 7, "1y", 1, 6, "f3-1-6"),
+    Row(1, 5, "1x", 1, 1, "f3-1-1"),
+    Row(1, 5, "1x", 1, 1, "f3-1-1"),
+    Row(1, 4, "1z", 1, 1, "f3-1-1"),
+    Row(1, 4, "1z", 1, 1, "f3-1-1")
+  )
   val PIT_1_3_WITH_KEY_NULLS_RAW = Seq(
     Row(1, 7, "1y", 1, 1, "f3-1-1"),
     Row(1, 4, "1z", 1, 1, "f3-1-1")
@@ -203,6 +215,10 @@ class SmallDataSortMerge(spark: SparkSession) extends SmallData(spark) {
   )
   val PIT_1_3: DataFrame = spark.createDataFrame(
     spark.sparkContext.parallelize(PIT_1_3_RAW),
+    PIT_2_schema
+  )
+  val PIT_1_3_DUPLICATES: DataFrame = spark.createDataFrame(
+    spark.sparkContext.parallelize(PIT_1_3_DUPLICATES_RAW),
     PIT_2_schema
   )
 
