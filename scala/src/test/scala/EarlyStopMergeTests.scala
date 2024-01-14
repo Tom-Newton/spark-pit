@@ -349,7 +349,7 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
       "inner",
       smallData.fg1_with_key_nulls,
       smallData.fg3_with_key_nulls,
-      smallData.PIT_1_WITH_KEY_NULLS_3,
+      smallData.PIT_1_3_WITH_KEY_NULLS,
       smallData.PIT_2_schema,
       0
     )
@@ -361,8 +361,8 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     testSearchingBackwardForMatches(
       "left",
       smallData.fg1_with_key_nulls,
-      smallData.fg3,
-      smallData.PIT_1_WITH_KEY_NULLS_3,
+      smallData.fg3_with_key_nulls,
+      smallData.PIT_1_3_WITH_KEY_NULLS_OUTER,
       smallData.PIT_2_schema,
       0
     )
