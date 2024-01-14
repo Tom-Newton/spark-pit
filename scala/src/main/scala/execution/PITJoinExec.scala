@@ -438,10 +438,6 @@ protected[pit] case class PITJoinExec(
     }
   }
 
-  /** Generate a function to scan both left and right to find a match, returns
-    * the term for matched one row from left side and buffered rows from right
-    * side.
-    */
   private def genScanner(ctx: CodegenContext) = {
     // Create class member for next row from both sides.
     // Inline mutable state since not many join operations in a task
@@ -473,10 +469,33 @@ protected[pit] case class PITJoinExec(
     val matchedPITKeyVars = copyKeys(ctx, leftPITKeyVars, leftPitKeys)
     val matchedEquiKeyVars = copyKeys(ctx, leftEquiKeyVars, leftEquiKeys)
 
+    // Generate a function to scan both streamed and buffered sides to find a match.
+    // Return whether a match is found.
+    //
+    // `leftIter`: the iterator for left (streamed) side.
+    // `bufferedIter`: the iterator for right (buffered) side.
+    // `leftRow`: the current row from left (streamed) side.
+    //                When `streamedIter` is empty, `streamedRow` is null.
+    // `rightRow`: the current match candidate row from right (buffered) side.
+    // `match`: the row from right (buffered) side which matches the matched with `leftRow`.
+    //            `match` is buffered and reused for all `streamedRow`s having same join keys.
+    //            If there is no match with `streamedRow`, `matches` is empty.
+    //
+    // The function has the following step:
+    //  - Step 1: Find the next `leftRow` with non-null join keys.
+    //            For `leftRow` with null join keys:
+    //            1. Inner join: skip this `leftRow` the row, and try the next one.
+    //            2. Left Outer join: keep the row and return false with null `match`.
+    //
+    //  - Step 2: Find the first `match` from right (buffered) side matching the join keys 
+    //            with `leftRow`. Return true after finding a match.
+    //            For `leftRow` without `match`:
+    //            1. Inner join: skip this `leftRow` the row, and try the next one.
+    //            2. Left Outer join: keep the row and return false with null `match`.
     ctx.addNewFunction(
-      "findNextInnerJoinRows",
+      "findNextJoinRows",
       s"""
-         |private boolean findNextInnerJoinRows(
+         |private boolean findNextJoinRows(
          |scala.collection.Iterator leftIter,
          |scala.collection.Iterator rightIter
          |){
@@ -489,6 +508,10 @@ protected[pit] case class PITJoinExec(
          |    ${leftPITKeyVars.map(_.code).mkString("\n")}
          |    ${leftEquiKeyVars.map(_.code).mkString("\n")}
          |    if($leftAnyNull) {
+         |      if($returnNulls) {
+         |        $matched = null;
+         |        return false;
+         |      }
          |      $leftRow = null;
          |      continue;
          |    }
@@ -638,7 +661,7 @@ protected[pit] case class PITJoinExec(
     if (returnNulls) {
       s"""
          |while($leftInput.hasNext()) {
-         |  findNextInnerJoinRows($leftInput, $rightInput);
+         |  findNextJoinRows($leftInput, $rightInput);
          |  ${leftVarDecl.mkString("\n")}
          |  ${beforeLoop.trim}
          |  InternalRow $rightRow = (InternalRow) $matched;
@@ -650,7 +673,7 @@ protected[pit] case class PITJoinExec(
          |""".stripMargin
     } else {
       s"""
-         |while (findNextInnerJoinRows($leftInput, $rightInput)) {
+         |while (findNextJoinRows($leftInput, $rightInput)) {
          |  ${leftVarDecl.mkString("\n")}
          |  ${beforeLoop.trim}
          |  InternalRow $rightRow = (InternalRow) $matched;
