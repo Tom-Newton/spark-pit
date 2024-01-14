@@ -744,12 +744,6 @@ protected[pit] class PITJoinScanner(
   private[this] var bufferedRowEquiKey: InternalRow = _
   private[this] var bufferedRowPITKey: InternalRow = _
 
-  /** The join key for the rows buffered in `bufferedMatches`, or null if
-    * `bufferedMatches` is empty
-    */
-  private[this] var matchJoinEquiKey: InternalRow = _
-  private[this] var matchJoinPITKey: InternalRow = _
-
   /** Contains the current match */
   private[this] var bufferedMatch: UnsafeRow = _
 
@@ -780,28 +774,11 @@ protected[pit] class PITJoinScanner(
     }
     val found = if (streamedRow == null) {
       // We have consumed the entire streamed iterator, so there can be no more matches.
-      matchJoinEquiKey = null
-      matchJoinPITKey = null
       bufferedMatch = null
       false
-    } else if (
-      matchJoinEquiKey != null && equiKeyOrdering.compare(
-        streamedRowEquiKey,
-        matchJoinEquiKey
-      ) == 0
-      && matchJoinPITKey != null && pitKeyOrdering.compare(
-        streamedRowPITKey,
-        matchJoinPITKey
-        // Streamed row key must be equal or greater than match
-      ) <= 0
-    ) {
-      // The new streamed row has the same join key as the previous row, so return the same matches.
-      true
     } else if (bufferedRow == null) {
       // The streamed row's join key does not match the current batch of buffered rows and there are
       // no more rows to read from the buffered iterator, so there can be no more matches.
-      matchJoinEquiKey = null
-      matchJoinPITKey = null
       bufferedMatch = null
       // If not returnNulls then we can exit early without searching through the remainder of the 
       // streamed row. If returnNulls then it doesn't matter that there are no more candidate rows
@@ -838,8 +815,6 @@ protected[pit] class PITJoinScanner(
         true
       } else if (streamedRow == null || bufferedRow == null) {
         // We have either hit the end of one of the iterators, so there can be no more matches.
-        matchJoinEquiKey = null
-        matchJoinPITKey = null
         bufferedMatch = null
         false
       } else {
