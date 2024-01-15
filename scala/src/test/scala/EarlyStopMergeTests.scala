@@ -80,7 +80,7 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
 
     expectedDataFrame.show()
 
-    // assert(pitJoin.schema.equals(expectedSchema))
+    assert(pitJoin.schema.equals(expectedSchema))
     assert(pitJoin.collect().sameElements(expectedDataFrame.collect()))
   }
 
@@ -391,7 +391,7 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
       smallData.fg1_duplicates,
       smallData.fg3_duplicates,
       smallData.PIT_1_3_DUPLICATES,
-      smallData.PIT_2_schema,
+      smallData.PIT_2_OUTER_schema,
       0
     )
   }
