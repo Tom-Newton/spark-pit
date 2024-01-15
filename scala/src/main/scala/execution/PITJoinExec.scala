@@ -769,72 +769,63 @@ protected[pit] class PITJoinScanner(
     *   called to construct the join result.
     */
   final def findNextJoinRows(): Boolean = {
-    val found = {
-      // Advance the `streamedRow` at the start of every call to avoid returning the same rows repeatedly.
-      if (advancedStreamed() && bufferedRow != null) {
-        // There is at least one more row in both iterators so search for the next match. 
-        // This might require advancing both iterators.
-        var keepSearching = true
-        do {
-          keepSearching = {
-            if (streamedRowPITKey.anyNull || streamedRowEquiKey.anyNull) {
-              exitSearchOrAdvanceStreamed()
-            } else {
-              assert(!bufferedRowPITKey.anyNull && !bufferedRowEquiKey.anyNull)
+    // Advance the `streamedRow` at the start of every call to avoid returning the same rows repeatedly.
+    val streamedIteratorNotEmpty = advancedStreamed()
+    val bufferedIteratorNotEmpty = bufferedRow != null
+    // If there is at least one more row in both iterators keepSearching,
+    var keepSearchingPotentiallyMoreJoinRows: (Boolean, Boolean) =
+      (
+        // If both iterators are non empty then searching might find a match
+        streamedIteratorNotEmpty && bufferedIteratorNotEmpty,
+        // For more join rows the streamed iterator must be non empty and either returnNulls is allowed or
+        // the buffered iterator is non empty.
+        streamedIteratorNotEmpty && (returnNulls || bufferedIteratorNotEmpty)
+      )
+    // This might require advancing both iterators.
+    while (keepSearchingPotentiallyMoreJoinRows._1) {
+      keepSearchingPotentiallyMoreJoinRows = {
+        if (streamedRowPITKey.anyNull || streamedRowEquiKey.anyNull) {
+          handleNoMatchForStreamedRow()
+        } else {
+          assert(!bufferedRowPITKey.anyNull && !bufferedRowEquiKey.anyNull)
 
-              val equiComp =
-                equiKeyOrdering.compare(streamedRowEquiKey, bufferedRowEquiKey)
-              val pitComp =
-                pitKeyOrdering.compare(streamedRowPITKey, bufferedRowPITKey)
+          val equiComp =
+            equiKeyOrdering.compare(streamedRowEquiKey, bufferedRowEquiKey)
+          val pitComp =
+            pitKeyOrdering.compare(streamedRowPITKey, bufferedRowPITKey)
 
-              if (equiComp < 0) {
-                // streamedRowEquiKey > bufferedRowEquiKey
-                // Advance (decrement) `streamedRow` to find next potential matches.
-                exitSearchOrAdvanceStreamed()
-              } else if (equiComp > 0 || pitComp > 0) {
-                // streamedRowEquiKey < bufferedRowEquiKey || streamedRowPITKey < bufferedRowPITKey
-                // Advance (decrement) `bufferedRow` to find next potential matches.
-                advancedBufferedToRowWithNullFreeJoinKeys()
-              } else if (
-                tolerance > 0 && (
-                  streamedRowPITKey
-                    .getLong(0) - bufferedRowPITKey.getLong(0) > tolerance
-                )
-              ) {
-                // Tolerance is enabled and `bufferedRow` is outside the tolerance. No other
-                // `bufferedRow` will be any closer to this `streamedRow`, so advance to the
-                // next `streamedRow`.
-                exitSearchOrAdvanceStreamed()
-              } else {
-                // Valid match found.
-                // The streamed row's join key matches the current buffered row's join, only take this row
-                assert(equiComp == 0 && pitComp <= 0)
-                bufferedMatch = bufferedRow.asInstanceOf[UnsafeRow]
-                false
-              }
-            }
+          if (equiComp < 0) {
+            // streamedRowEquiKey > bufferedRowEquiKey
+            // Advance (decrement) `streamedRow` to find next potential matches.
+            handleNoMatchForStreamedRow()
+          } else if (equiComp > 0 || pitComp > 0) {
+            // streamedRowEquiKey < bufferedRowEquiKey || streamedRowPITKey < bufferedRowPITKey
+            // Advance (decrement) `bufferedRow` to find next potential matches.
+            handleBufferedRowDoesNotMatch()
+          } else if (
+            tolerance > 0 && (
+              streamedRowPITKey
+                .getLong(0) - bufferedRowPITKey.getLong(0) > tolerance
+            )
+          ) {
+            // Tolerance is enabled and `bufferedRow` is outside the tolerance. No other
+            // `bufferedRow` will be any closer to this `streamedRow`, so advance to the
+            // next `streamedRow`.
+            handleNoMatchForStreamedRow()
+          } else {
+            // The streamed row's join key matches the current buffered row's join, only take this row
+            assert(equiComp == 0 && pitComp <= 0)
+            bufferedMatch = bufferedRow.asInstanceOf[UnsafeRow]
+            (
+              false, // Stop searching after finding a valid match.
+              true // Potentially there will be another streamed row, therefore more join rows.
+            )
           }
-        } while (keepSearching)
-      }
-      if (streamedRow == null) {
-        // The streamed iterator is exhausted, so there can be no more matches.
-        return false
-      } else if (bufferedRow == null) {
-        // The buffered iterator is exhausted, so there can be no more matches. 
-        // If returnNulls we still need to return unmatched left rows. 
-        bufferedMatch = null
-        returnNulls
-      } else if (bufferedMatch == null) {
-        // Search exited early without a match - this is only possible if returnNulls. 
-        // We need to keep iterating. 
-        true
-      } else {
-        // We have found a match. 
-        true
+        }
       }
     }
-    if (!found) eagerCleanupResources()
-    found
+    if (!keepSearchingPotentiallyMoreJoinRows._2) eagerCleanupResources()
+    keepSearchingPotentiallyMoreJoinRows._2
   }
 
   // --- Private methods --------------------------------------------------------------------------
@@ -858,18 +849,41 @@ protected[pit] class PITJoinScanner(
     }
   }
 
-  /** If returnNulls exit search with null `bufferedMatch`, otherwise advance the 
-    * streamed iterator to continue searching.
+  /** If returnNulls exit search early with `bufferedMatch = null`, otherwise advance
+    * the streamed iterator to continue searching.
     *
     * @return
-    *   true we should continue searching for a match and false otherwise. 
+    *   (keepSearching: Boolean, potentiallyMoreJoinRows: Boolean)
     */
-  private def exitSearchOrAdvanceStreamed(): Boolean = {
+  private def handleNoMatchForStreamedRow(): (Boolean, Boolean) = {
     if (returnNulls) {
       bufferedMatch = null
-      return false
+      return (
+        false, // Stop searching to return the streamed row.
+        true // Potentially there will be another streamed row, therefore more join rows.
+      )
     }
-    return advancedStreamed()
+    return (
+      advancedStreamed(), // Stop searching if the streamed iterator is exhausted
+      // Only relevant if the search is stopped on this iteration. That will happen only
+      // if the steamed iterator is exhausted, so there will be no more join rows.
+      false
+    )
+  }
+
+  /** Advance to the next buffered row. 
+    *
+    * @return
+    *   (keepSearching: Boolean, potentiallyMoreJoinRows: Boolean)
+    */
+  private def handleBufferedRowDoesNotMatch(): (Boolean, Boolean) = {
+    bufferedMatch = null
+    return (
+      advancedBufferedToRowWithNullFreeJoinKeys(), // Stop searching if buffered iterator is exhausted.
+      // If returnNulls there could be more unmatched join rows.
+      // If not returnNulls there can be no more join rows.
+      returnNulls
+    )
   }
 
   /** Advance the buffered iterator until we find a row with join keys
