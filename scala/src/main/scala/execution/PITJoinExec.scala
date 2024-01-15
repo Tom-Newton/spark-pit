@@ -474,12 +474,6 @@ protected[pit] case class PITJoinExec(
     //            For `leftRow` without `match`:
     //            1. Inner join: skip this `leftRow` the row, and try the next one.
     //            2. Left Outer join: keep the row and return false with null `match`.
-
-    // Exit reasons:
-    // 1. Either of the iterators is exhausted.
-    // 2. A match is found.
-    // 3. Left join and no match possible for this `leftRow`.
-
     ctx.addNewFunction(
       "findNextJoinRows",
       s"""
