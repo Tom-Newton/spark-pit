@@ -677,10 +677,11 @@ protected[pit] case class PITJoinExec(
   }
 }
 
+// TODO: Update this comment
 /** Helper class that is used to implement [[PITJoinExec]].
   *
-  * To perform an inner (outer) join, users of this class call
-  * [[findNextInnerJoinRows()]] which returns `true` if a result has been
+  * To perform an inner or left join, users of this class call
+  * [[findNextJoinRows()]]. This returns `true` if a result has been
   * produced and `false` otherwise. If a result has been produced, then the
   * caller may call [[getStreamedRow]] to return the matching row from the
   * streamed input For efficiency, both of these methods return mutable objects
@@ -742,8 +743,6 @@ protected[pit] class PITJoinScanner(
   // --- Public methods ---------------------------------------------------------------------------
 
   def getStreamedRow: InternalRow = streamedRow
-
-  def getBufferedRow: InternalRow = bufferedRow
 
   def getBufferedMatch: UnsafeRow = bufferedMatch
 

@@ -151,6 +151,18 @@ class SmallDataSortMerge(spark: SparkSession) extends SmallData(spark) {
       StructField("value", StringType, nullable = true)
     )
   )
+
+  val PIT_2_NULLABLE_KEYS_schema: StructType = StructType(
+    Seq(
+      StructField("id", IntegerType, nullable = true),
+      StructField("ts", IntegerType, nullable = true),
+      StructField("value", StringType, nullable = false),
+      StructField("id", IntegerType, nullable = true),
+      StructField("ts", IntegerType, nullable = true),
+      StructField("value", StringType, nullable = false)
+    )
+  )
+
   val PIT_2_OUTER_schema: StructType = StructType(
     Seq(
       StructField("id", IntegerType, nullable = false),

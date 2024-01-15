@@ -352,7 +352,10 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
       smallData.fg1_with_key_nulls,
       smallData.fg3_with_key_nulls,
       smallData.PIT_1_3_WITH_KEY_NULLS,
-      smallData.PIT_2_schema,
+      // It could be argued the correct schema would be `smallData.PIT_2_schema`, 
+      // i.e. with join key columns made non-nullable. However, the normal spark inner
+      // join does not do this, so we don't either.
+      smallData.PIT_2_NULLABLE_KEYS_schema,
       0
     )
   }
@@ -365,7 +368,7 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
       smallData.fg1_with_key_nulls,
       smallData.fg3_with_key_nulls,
       smallData.PIT_1_3_WITH_KEY_NULLS_OUTER,
-      smallData.PIT_2_schema,
+      smallData.PIT_2_NULLABLE_KEYS_OUTER_schema,
       0
     )
   }
