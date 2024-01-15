@@ -147,19 +147,7 @@ protected[pit] case class PITJoinExec(
     val numOutputRows = longMetric("numOutputRows")
 
     left.execute().zipPartitions(right.execute()) { (leftIter, rightIter) =>
-      val boundCondition: InternalRow => Boolean = {
-        condition
-          .map { cond =>
-            Predicate.create(cond, left.output ++ right.output).eval _
-
-          }
-          .getOrElse { (r: InternalRow) =>
-            true
-          }
-      }
-
       // An ordering that can be used to compare keys from both sides.
-
       // Ordering of the equi-keys
       val equiOrder: Seq[SortOrder] =
         leftEquiKeys.map(_.dataType).zipWithIndex.map { case (dt, index) =>
@@ -214,10 +202,8 @@ protected[pit] case class PITJoinExec(
                   return true
                 } else {
                   joinRow(currentLeftRow, currentRightMatch)
-                  if (boundCondition(joinRow)) {
-                    numOutputRows += 1
-                    return true
-                  }
+                  numOutputRows += 1
+                  return true
                 }
               }
               false
