@@ -192,9 +192,9 @@ protected[pit] case class PITJoinExec(
               new GenericInternalRow(right.output.length)
 
             override def advanceNext(): Boolean = {
-              if (smjScanner.findNextJoinRows()) {
-                currentRightMatch = smjScanner.getBufferedMatch
-                currentLeftRow = smjScanner.getStreamedRow
+              if (smjScanner.findNextJoinRow()) {
+                currentRightMatch = smjScanner.getRightMatch
+                currentLeftRow = smjScanner.getLeftRow
                 if (currentRightMatch == null) {
                   joinRow(currentLeftRow, nullRightRow)
                   joinRow.withRight(nullRightRow)
@@ -452,17 +452,16 @@ protected[pit] case class PITJoinExec(
     val matchedPITKeyVars = copyKeys(ctx, leftPITKeyVars, leftPitKeys)
     val matchedEquiKeyVars = copyKeys(ctx, leftEquiKeyVars, leftEquiKeys)
 
-    // Generate a function to scan both streamed and buffered sides to find a match.
+    // Generate a function to scan both left and right sides to find a match.
     // Return whether a match is found.
     //
-    // `leftIter`: the iterator for left (streamed) side.
-    // `bufferedIter`: the iterator for right (buffered) side.
-    // `leftRow`: the current row from left (streamed) side.
-    //                When `streamedIter` is empty, `streamedRow` is null.
-    // `rightRow`: the current match candidate row from right (buffered) side.
-    // `match`: the row from right (buffered) side which matches the matched with `leftRow`.
-    //            `match` is buffered and reused for all `streamedRow`s having same join keys.
-    //            If there is no match with `streamedRow`, `matches` is empty.
+    // `leftIter`: the iterator for left side.
+    // `rightIter`: the iterator for right  side.
+    // `leftRow`: the current row from left side.
+    //                When `leftIter` is empty, `leftRow` is null.
+    // `rightRow`: the current match candidate row from right side.
+    // `match`: the row from right side which matches the with `leftRow`.
+    //            If there is no match with `leftRow`, `matches` is empty.
     //
     // The function has the following step:
     //  - Step 1: Find the next `leftRow` with non-null join keys.
@@ -470,7 +469,7 @@ protected[pit] case class PITJoinExec(
     //            1. Inner join: skip this `leftRow` the row, and try the next one.
     //            2. Left Outer join: keep the row and return false with null `match`.
     //
-    //  - Step 2: Find the first `match` from right (buffered) side matching the join keys
+    //  - Step 2: Find the first `match` from right side matching the join keys
     //            with `leftRow`. Return true after finding a match.
     //            For `leftRow` without `match`:
     //            1. Inner join: skip this `leftRow` the row, and try the next one.
@@ -680,130 +679,131 @@ protected[pit] case class PITJoinExec(
 // TODO: Update this comment
 /** Helper class that is used to implement [[PITJoinExec]].
   *
-  * To perform an inner or left join, users of this class call
-  * [[findNextJoinRows()]]. This returns `true` if a result has been
-  * produced and `false` otherwise. If a result has been produced, then the
-  * caller may call [[getStreamedRow]] to return the matching row from the
-  * streamed input For efficiency, both of these methods return mutable objects
-  * which are re-used across calls to the `findNext*JoinRows()` methods.
-  *
-  * @param streamedPITKeyGenerator
-  *   a projection that produces PIT join keys from the streamed input.
-  * @param bufferedPITKeyGenerator
-  *   a projection that produces PIT join keys from the buffered input.
+  * To perform an inner or outer join, users of this class call
+  * [[findNextJoinRow()]], which returns `true` if a result has been produced
+  * and `false` otherwise. If a result has been produced, then the caller may
+  * call [[getLeftRow]] and [[getRightMatch]] to get left and right sides
+  * respectively, of the joined row. Both of these methods return mutable
+  * objects which are re-used across calls to the `findNextJoinRow()`.
+  * @param leftPITKeyGenerator
+  *   a projection that produces PIT join keys from the left input.
+  * @param rightPITKeyGenerator
+  *   a projection that produces PIT join keys from the right input.
   * @param pitKeyOrdering
   *   an ordering which can be used to compare PIT join keys.
-  * @param streamedEquiKeyGenerator
-  *   a projection that produces join keys from the streamed input.
-  * @param bufferedEquiKeyGenerator
-  *   a projection that produces join keys from the buffered input.
+  * @param leftEquiKeyGenerator
+  *   a projection that produces join keys from the left input.
+  * @param rightEquiKeyGenerator
+  *   a projection that produces join keys from the right input.
   * @param equiKeyOrdering
   *   an ordering which can be used to compare equi join keys.
-  * @param streamedIter
-  *   an input whose rows will be streamed.
-  * @param bufferedIter
-  *   an input whose rows will be buffered to construct sequences of rows that
-  *   have the same join key.
+  * @param leftIter
+  *   an input whose rows will be left.
+  * @param rightIter
+  *   an input whose rows will be right.
   * @param eagerCleanupResources
   *   the eager cleanup function to be invoked when no join row found
   * @param returnNulls
-  *   event if no PIT match found, return the left row with right columns filled
-  *   with null
+  *   if no PIT match found, return the left row with right columns filled with
+  *   null (left outer join)
   * @param tolerance
   *   tolerance for how long we want to look back, if value is 0, do no use
   *   tolerance
   */
 protected[pit] class PITJoinScanner(
-    streamedPITKeyGenerator: Projection,
-    bufferedPITKeyGenerator: Projection,
+    leftPITKeyGenerator: Projection,
+    rightPITKeyGenerator: Projection,
     pitKeyOrdering: Ordering[InternalRow],
-    streamedEquiKeyGenerator: Projection,
-    bufferedEquiKeyGenerator: Projection,
+    leftEquiKeyGenerator: Projection,
+    rightEquiKeyGenerator: Projection,
     equiKeyOrdering: Ordering[InternalRow],
-    streamedIter: RowIterator,
-    bufferedIter: RowIterator,
+    leftIter: RowIterator,
+    rightIter: RowIterator,
     eagerCleanupResources: () => Unit,
     returnNulls: Boolean = false,
     tolerance: Long = 0
 ) {
-  private[this] var streamedRow: InternalRow = _
-  private[this] var streamedRowEquiKey: InternalRow = _
-  private[this] var streamedRowPITKey: InternalRow = _
-  private[this] var bufferedRow: InternalRow = _
+  private[this] var leftRow: InternalRow = _
+  private[this] var leftRowEquiKey: InternalRow = _
+  private[this] var leftRowPITKey: InternalRow = _
+  private[this] var rightRow: InternalRow = _
   // Note: this is guaranteed to never have any null columns:
-  private[this] var bufferedRowEquiKey: InternalRow = _
-  private[this] var bufferedRowPITKey: InternalRow = _
+  private[this] var rightRowEquiKey: InternalRow = _
+  private[this] var rightRowPITKey: InternalRow = _
 
   /** Contains the current match */
-  private[this] var bufferedMatch: UnsafeRow = _
+  private[this] var rightMatch: UnsafeRow = _
 
-  // Initialization (note: do _not_ want to advance streamed here).
-  advancedBufferedToRowWithNullFreeJoinKeys()
+  // Initialization (note: do _not_ want to advance left here).
+  advancedRightToRowWithNullFreeJoinKeys()
 
   // --- Public methods ---------------------------------------------------------------------------
 
-  def getStreamedRow: InternalRow = streamedRow
+  def getLeftRow: InternalRow = leftRow
 
-  def getBufferedMatch: UnsafeRow = bufferedMatch
+  def getRightMatch: UnsafeRow = rightMatch
 
-  /** Advances both input iterators, stopping on the first row with matching
-    * join keys. If no join rows found, try to do the eager resources cleanup.
+  /** Advances left iterator by one then starts searching for a match. If
+    * returnNulls it will always return a result for every left row so it will
+    * only advance the right iterator when searching. If not returnNulls it will
+    * may advance both iterators when searching for a match. When there are no
+    * more potential matches it does eager cleanup. 
     * @return
     *   true if matching rows have been found and false otherwise. If this
-    *   returns true, then [[getStreamedRow]] and [[getBufferedMatch]] can be
-    *   called to construct the join result.
+    *   returns true, then [[getLeftRow]] and [[getRightMatch]] can be called to
+    *   construct the join result.
     */
-  final def findNextJoinRows(): Boolean = {
-    // Advance the `streamedRow` at the start of every call to avoid returning the same rows repeatedly.
-    val streamedIteratorNotEmpty = advancedStreamed()
-    val bufferedIteratorNotEmpty = bufferedRow != null
+  final def findNextJoinRow(): Boolean = {
+    // Advance the `leftRow` at the start of every call to avoid returning the same rows repeatedly.
+    val leftIteratorNotEmpty = advancedLeft()
+    val rightIteratorNotEmpty = rightRow != null
     // If there is at least one more row in both iterators keepSearching,
     var keepSearchingPotentiallyMoreJoinRows: (Boolean, Boolean) =
       (
         // If both iterators are non empty then searching might find a match
-        streamedIteratorNotEmpty && bufferedIteratorNotEmpty,
-        // For more join rows the streamed iterator must be non empty and either returnNulls is allowed or
-        // the buffered iterator is non empty.
-        streamedIteratorNotEmpty && (returnNulls || bufferedIteratorNotEmpty)
+        leftIteratorNotEmpty && rightIteratorNotEmpty,
+        // For more join rows the left iterator must be non empty and either returnNulls is allowed or
+        // the right iterator is non empty.
+        leftIteratorNotEmpty && (returnNulls || rightIteratorNotEmpty)
       )
     // This might require advancing both iterators.
     while (keepSearchingPotentiallyMoreJoinRows._1) {
       keepSearchingPotentiallyMoreJoinRows = {
-        if (streamedRowPITKey.anyNull || streamedRowEquiKey.anyNull) {
-          handleNoMatchForStreamedRow()
+        if (leftRowPITKey.anyNull || leftRowEquiKey.anyNull) {
+          handleNoMatchForLeftRow()
         } else {
-          assert(!bufferedRowPITKey.anyNull && !bufferedRowEquiKey.anyNull)
+          assert(!rightRowPITKey.anyNull && !rightRowEquiKey.anyNull)
 
           val equiComp =
-            equiKeyOrdering.compare(streamedRowEquiKey, bufferedRowEquiKey)
+            equiKeyOrdering.compare(leftRowEquiKey, rightRowEquiKey)
           val pitComp =
-            pitKeyOrdering.compare(streamedRowPITKey, bufferedRowPITKey)
+            pitKeyOrdering.compare(leftRowPITKey, rightRowPITKey)
 
           if (equiComp < 0) {
-            // streamedRowEquiKey > bufferedRowEquiKey
-            // Advance (decrement) `streamedRow` to find next potential matches.
-            handleNoMatchForStreamedRow()
+            // leftRowEquiKey > rightRowEquiKey
+            // Advance (decrement) `leftRow` to find next potential matches.
+            handleNoMatchForLeftRow()
           } else if (equiComp > 0 || pitComp > 0) {
-            // streamedRowEquiKey < bufferedRowEquiKey || streamedRowPITKey < bufferedRowPITKey
-            // Advance (decrement) `bufferedRow` to find next potential matches.
-            handleBufferedRowDoesNotMatch()
+            // leftRowEquiKey < rightRowEquiKey || leftRowPITKey < rightRowPITKey
+            // Advance (decrement) `rightRow` to find next potential matches.
+            handleRightRowDoesNotMatch()
           } else if (
             tolerance > 0 && (
-              streamedRowPITKey
-                .getLong(0) - bufferedRowPITKey.getLong(0) > tolerance
+              leftRowPITKey
+                .getLong(0) - rightRowPITKey.getLong(0) > tolerance
             )
           ) {
-            // Tolerance is enabled and `bufferedRow` is outside the tolerance. No other
-            // `bufferedRow` will be any closer to this `streamedRow`, so advance to the
-            // next `streamedRow`.
-            handleNoMatchForStreamedRow()
+            // Tolerance is enabled and `rightRow` is outside the tolerance. No other
+            // `rightRow` will be any closer to this `leftRow`, so advance to the
+            // next `leftRow`.
+            handleNoMatchForLeftRow()
           } else {
-            // The streamed row's join key matches the current buffered row's join, only take this row
+            // The left row's join key matches the current right row's join, only take this row
             assert(equiComp == 0 && pitComp <= 0)
-            bufferedMatch = bufferedRow.asInstanceOf[UnsafeRow]
+            rightMatch = rightRow.asInstanceOf[UnsafeRow]
             (
               false, // Stop searching after finding a valid match.
-              true // Potentially there will be another streamed row, therefore more join rows.
+              true // Potentially there will be another left row, therefore more join rows.
             )
           }
         }
@@ -815,79 +815,79 @@ protected[pit] class PITJoinScanner(
 
   // --- Private methods --------------------------------------------------------------------------
 
-  /** Advance the streamed iterator and compute the new row's join key.
+  /** Advance the left iterator and compute the new row's join key.
     *
     * @return
-    *   true if the streamed iterator returned a row and false otherwise.
+    *   true if the left iterator returned a row and false otherwise.
     */
-  private def advancedStreamed(): Boolean = {
-    if (streamedIter.advanceNext()) {
-      streamedRow = streamedIter.getRow
-      streamedRowEquiKey = streamedEquiKeyGenerator(streamedRow)
-      streamedRowPITKey = streamedPITKeyGenerator(streamedRow)
+  private def advancedLeft(): Boolean = {
+    if (leftIter.advanceNext()) {
+      leftRow = leftIter.getRow
+      leftRowEquiKey = leftEquiKeyGenerator(leftRow)
+      leftRowPITKey = leftPITKeyGenerator(leftRow)
       true
     } else {
-      streamedRow = null
-      streamedRowPITKey = null
-      streamedRowEquiKey = null
+      leftRow = null
+      leftRowPITKey = null
+      leftRowEquiKey = null
       false
     }
   }
 
-  /** If returnNulls exit search early with `bufferedMatch = null`, otherwise advance
-    * the streamed iterator to continue searching.
+  /** If returnNulls exit search early with `rightMatch = null`, otherwise
+    * advance the left iterator to continue searching.
     *
     * @return
     *   (keepSearching: Boolean, potentiallyMoreJoinRows: Boolean)
     */
-  private def handleNoMatchForStreamedRow(): (Boolean, Boolean) = {
+  private def handleNoMatchForLeftRow(): (Boolean, Boolean) = {
     if (returnNulls) {
-      bufferedMatch = null
+      rightMatch = null
       return (
-        false, // Stop searching to return the streamed row.
-        true // Potentially there will be another streamed row, therefore more join rows.
+        false, // Stop searching to return the left row.
+        true // Potentially there will be another left row, therefore more join rows.
       )
     }
     return (
-      advancedStreamed(), // Stop searching if the streamed iterator is exhausted
+      advancedLeft(), // Stop searching if the left iterator is exhausted
       // Only relevant if the search is stopped on this iteration. That will happen only
       // if the steamed iterator is exhausted, so there will be no more join rows.
       false
     )
   }
 
-  /** Advance to the next buffered row. 
+  /** Advance to the next right row.
     *
     * @return
     *   (keepSearching: Boolean, potentiallyMoreJoinRows: Boolean)
     */
-  private def handleBufferedRowDoesNotMatch(): (Boolean, Boolean) = {
-    bufferedMatch = null
+  private def handleRightRowDoesNotMatch(): (Boolean, Boolean) = {
+    rightMatch = null
     return (
-      advancedBufferedToRowWithNullFreeJoinKeys(), // Stop searching if buffered iterator is exhausted.
+      advancedRightToRowWithNullFreeJoinKeys(), // Stop searching if right iterator is exhausted.
       // If returnNulls there could be more unmatched join rows.
       // If not returnNulls there can be no more join rows.
       returnNulls
     )
   }
 
-  /** Advance the buffered iterator until we find a row with join keys
+  /** Advance the right iterator until we find a row with join keys
     *
     * @return
-    *   true if the buffered iterator returned a row and false otherwise.
+    *   true if the right iterator returned a row and false otherwise.
     */
-  private def advancedBufferedToRowWithNullFreeJoinKeys(): Boolean = {
+  private def advancedRightToRowWithNullFreeJoinKeys(): Boolean = {
     var foundRow: Boolean = false
-    while (!foundRow && bufferedIter.advanceNext()) {
-      bufferedRow = bufferedIter.getRow
-      bufferedRowEquiKey = bufferedEquiKeyGenerator(bufferedRow)
-      bufferedRowPITKey = bufferedPITKeyGenerator(bufferedRow)
-      foundRow = !bufferedRowEquiKey.anyNull && !bufferedRowPITKey.anyNull
+    while (!foundRow && rightIter.advanceNext()) {
+      rightRow = rightIter.getRow
+      rightRowEquiKey = rightEquiKeyGenerator(rightRow)
+      rightRowPITKey = rightPITKeyGenerator(rightRow)
+      foundRow = !rightRowEquiKey.anyNull && !rightRowPITKey.anyNull
     }
     if (!foundRow) {
-      bufferedRow = null
-      bufferedRowEquiKey = null
-      bufferedRowPITKey = null
+      rightRow = null
+      rightRowEquiKey = null
+      rightRowPITKey = null
       false
     } else {
       true
