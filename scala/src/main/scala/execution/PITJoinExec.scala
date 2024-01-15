@@ -747,7 +747,7 @@ protected[pit] class PITJoinScanner(
     * returnNulls it will always return a result for every left row so it will
     * only advance the right iterator when searching. If not returnNulls it will
     * may advance both iterators when searching for a match. When there are no
-    * more potential matches it does eager cleanup. 
+    * more potential matches it does eager cleanup.
     * @return
     *   true if matching rows have been found and false otherwise. If this
     *   returns true, then [[getLeftRow]] and [[getRightMatch]] can be called to
