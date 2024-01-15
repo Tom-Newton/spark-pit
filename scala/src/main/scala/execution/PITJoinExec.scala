@@ -670,7 +670,6 @@ protected[pit] case class PITJoinExec(
   }
 }
 
-// TODO: Update this comment
 /** Helper class that is used to implement [[PITJoinExec]].
   *
   * To perform an inner or outer join, users of this class call
