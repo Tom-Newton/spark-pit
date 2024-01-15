@@ -750,16 +750,15 @@ protected[pit] class PITJoinScanner(
     // Advance the `leftRow` at the start of every call to avoid returning the same rows repeatedly.
     val leftIteratorNotEmpty = advancedLeft()
     val rightIteratorNotEmpty = rightRow != null
-    // If there is at least one more row in both iterators keepSearching,
     var keepSearchingPotentiallyMoreJoinRows: (Boolean, Boolean) =
       (
-        // If both iterators are non empty then searching might find a match
+        // If both iterators are non-empty then searching might find a match - keep searching.
         leftIteratorNotEmpty && rightIteratorNotEmpty,
-        // For more join rows the left iterator must be non empty and either returnNulls is allowed or
-        // the right iterator is non empty.
+        // For more join rows the left iterator must be non-empty and either returnNulls is allowed or
+        // the right iterator is non-empty.
         leftIteratorNotEmpty && (returnNulls || rightIteratorNotEmpty)
       )
-    // This might require advancing both iterators.
+    // Run the search. If not returnNulls this might require advancing both iterators.
     while (keepSearchingPotentiallyMoreJoinRows._1) {
       keepSearchingPotentiallyMoreJoinRows = {
         if (leftRowPITKey.anyNull || leftRowEquiKey.anyNull) {
