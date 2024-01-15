@@ -204,10 +204,10 @@ protected[pit] case class PITJoinExec(
               new GenericInternalRow(right.output.length)
 
             override def advanceNext(): Boolean = {
-              while (smjScanner.findNextJoinRows()) {
+              if (smjScanner.findNextJoinRows()) {
                 currentRightMatch = smjScanner.getBufferedMatch
                 currentLeftRow = smjScanner.getStreamedRow
-                if (returnNulls && currentRightMatch == null) {
+                if (currentRightMatch == null) {
                   joinRow(currentLeftRow, nullRightRow)
                   joinRow.withRight(nullRightRow)
                   numOutputRows += 1
@@ -220,9 +220,6 @@ protected[pit] case class PITJoinExec(
                   }
                 }
               }
-
-              currentRightMatch = null
-              currentLeftRow = null
               false
             }
 
@@ -852,7 +849,6 @@ protected[pit] class PITJoinScanner(
       streamedRow = streamedIter.getRow
       streamedRowEquiKey = streamedEquiKeyGenerator(streamedRow)
       streamedRowPITKey = streamedPITKeyGenerator(streamedRow)
-      bufferedMatch = null
       true
     } else {
       streamedRow = null
