@@ -40,7 +40,7 @@ import org.apache.spark.sql.catalyst.rules.Rule
 
 protected[pit] object PITRule extends Rule[LogicalPlan] with PredicateHelper {
   def apply(logicalPlan: LogicalPlan): LogicalPlan = {
-    // println(logicalPlan)
+    println(logicalPlan)
     logicalPlan.transform {
       case j @ Join(left, right, joinType, condition, _) =>
         val predicates = {
