@@ -401,12 +401,12 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
   // }
 
   def testJoinThenFilter() {
-    val leftDataFrame = smallData.fg1
-    val rightDataFrame = smallData.fg3
+    val leftDataFrame = smallData.fg3
+    val rightDataFrame = smallData.fg1
     leftDataFrame.show()
     rightDataFrame.show()
 
-    val pitJoin =
+    var pitJoin =
       leftDataFrame.join(
         rightDataFrame,
         pit(
@@ -416,8 +416,12 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
         ) && 
         leftDataFrame("id") === rightDataFrame("id"),
         "left"
-      ).filter(rightDataFrame("value") === lit("f3-1-1"))
-    // .filter(leftDataFrame("value") === lit("1z"))
+      )
+      
+    pitJoin.show()
+    pitJoin = pitJoin.filter(rightDataFrame("value") === lit("1x"))
+    
+    pitJoin.show()
 
 
     pitJoin.explain(true)
