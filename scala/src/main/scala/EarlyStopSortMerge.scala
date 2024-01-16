@@ -30,11 +30,17 @@ import logical.PITJoin
 
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.functions.udf
-import org.apache.spark.sql.{Column, SparkSession, Dataset, Encoder}
+import org.apache.spark.sql.{
+  Column,
+  SparkSession,
+  Dataset,
+  Encoder,
+  SparkSessionExtensionsProvider,
+  SparkSessionExtensions
+}
 import org.apache.hadoop.shaded.org.eclipse.jetty.websocket.common.frames.DataFrame
 import scala.collection.mutable.{ArrayBuffer, HashSet}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-
 
 object EarlyStopSortMerge {
   private final val PIT_FUNCTION = (
@@ -49,14 +55,14 @@ object EarlyStopSortMerge {
     if (!spark.catalog.functionExists(PIT_UDF_NAME)) {
       spark.udf.register(PIT_UDF_NAME, pit)
     }
-    if (!spark.experimental.extraStrategies.contains(CustomStrategy)) {
-      spark.experimental.extraStrategies =
-        spark.experimental.extraStrategies :+ CustomStrategy
-    }
-    if (!spark.experimental.contains(PITRule)) {
-      spark.experimental.extraOptimizations =
-        spark.experimental.extraOptimizations :+ PITRule
-    }
+    // if (!spark.experimental.extraStrategies.contains(CustomStrategy)) {
+    //   spark.experimental.extraStrategies =
+    //     spark.experimental.extraStrategies :+ CustomStrategy
+    // }
+    // if (!spark.experimental.extraOptimizations.contains(PITRule)) {
+    //   spark.experimental.extraOptimizations =
+    //     spark.experimental.extraOptimizations :+ PITRule
+    // }
   }
 
   // For the PySpark API
@@ -65,8 +71,10 @@ object EarlyStopSortMerge {
 
 class YourExtensions extends SparkSessionExtensionsProvider {
   override def apply(extensions: SparkSessionExtensions): Unit = {
-    extensions.injectResolutionRule { session =>
-    }
-    extensions.injectFunction()
+    // extensions.injectResolutionRule { session => }
+    // extensions.injectFunction()
+    // extensions.injectPostHocResolutionRule(session => PITRule)
+    extensions.injectPlannerStrategy(session => CustomStrategy)
+    extensions.injectOptimizerRule(session => PITRule)
   }
 }

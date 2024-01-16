@@ -39,7 +39,8 @@ import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
 import org.apache.spark.sql.catalyst.rules.Rule
 
 protected[pit] object PITRule extends Rule[LogicalPlan] with PredicateHelper {
-  def apply(logicalPlan: LogicalPlan): LogicalPlan =
+  def apply(logicalPlan: LogicalPlan): LogicalPlan = {
+    // println(logicalPlan)
     logicalPlan.transform {
       case j @ Join(left, right, joinType, condition, _) =>
         val predicates = {
@@ -88,6 +89,7 @@ protected[pit] object PITRule extends Rule[LogicalPlan] with PredicateHelper {
           j
         }
     }
+  }
 
   private def getPITExpression(predicates: Seq[Expression]) = {
     predicates.flatMap {
