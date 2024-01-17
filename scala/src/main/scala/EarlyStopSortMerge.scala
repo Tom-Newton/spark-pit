@@ -40,71 +40,75 @@ import execution.CustomStrategy
 import logical.PITJoin
 
 object EarlyStopSortMerge {
-  implicit class applyPITJoin(df: DataFrame) {
-    def pitJoin(
-        right: DataFrame,
-        leftPitExpression: Column,
-        rightPitExpression: Column,
-        joinType: String,
-        tolerance: Long
-    ): DataFrame = pitJoin(
-      right,
-      leftPitExpression,
-      rightPitExpression,
-      None,
-      joinType,
-      tolerance,
-    )
+  // implicit class PITDataFrame(df: DataFrame) {
+  def joinPIT(
+      left: DataFrame,
+      right: DataFrame,
+      leftPitExpression: Column,
+      rightPitExpression: Column,
+      joinType: String,
+      tolerance: Long
+  ): DataFrame = joinPIT(
+    left,
+    right,
+    leftPitExpression,
+    rightPitExpression,
+    tolerance,
+    None,
+    joinType
+  )
 
-    def pitJoin(
-        right: DataFrame,
-        leftPitExpression: Column,
-        rightPitExpression: Column,
-        joinExprs: Column,
-        joinType: String,
-        tolerance: Long
-    ): DataFrame = pitJoin(
-      right,
-      leftPitExpression,
-      rightPitExpression,
-      Some(joinExprs),
-      joinType,
-      tolerance,
-    )
+  def joinPIT(
+      left: DataFrame,
+      right: DataFrame,
+      leftPitExpression: Column,
+      rightPitExpression: Column,
+      tolerance: Long,
+      joinExprs: Column,
+      joinType: String
+  ): DataFrame = joinPIT(
+    left,
+    right,
+    leftPitExpression,
+    rightPitExpression,
+    tolerance,
+    Some(joinExprs),
+    joinType
+  )
 
-    def pitJoin(
-        right: DataFrame,
-        leftPitExpression: Column,
-        rightPitExpression: Column,
-        joinExprs: Option[Column],
-        joinType: String,
-        tolerance: Long
-    ): DataFrame = {
+  def joinPIT(
+      left: DataFrame,
+      right: DataFrame,
+      leftPitExpression: Column,
+      rightPitExpression: Column,
+      tolerance: Long,
+      joinExprs: Option[Column],
+      joinType: String
+  ): DataFrame = {
 
-      val parsedJoinType = JoinType(joinType)
-      parsedJoinType match {
-        case LeftOuter | Inner => ()
-        case x =>
-          throw new IllegalArgumentException(
-            s"Join type $x not supported for PIT joins"
-          )
-      }
-
-      val logicalPlan = PITJoin(
-        df.queryExecution.analyzed,
-        right.queryExecution.analyzed,
-        leftPitExpression.expr,
-        rightPitExpression.expr,
-        parsedJoinType == LeftOuter,
-        tolerance,
-        joinExprs.map(_.expr)
-      )
-      new DataFrame(
-        df.sparkSession,
-        logicalPlan,
-        ExpressionEncoder(logicalPlan.schema)
-      )
+    val parsedJoinType = JoinType(joinType)
+    parsedJoinType match {
+      case LeftOuter | Inner => ()
+      case x =>
+        throw new IllegalArgumentException(
+          s"Join type $x not supported for PIT joins"
+        )
     }
+
+    val logicalPlan = PITJoin(
+      left.queryExecution.analyzed,
+      right.queryExecution.analyzed,
+      leftPitExpression.expr,
+      rightPitExpression.expr,
+      parsedJoinType == LeftOuter,
+      tolerance,
+      joinExprs.map(_.expr)
+    )
+    new DataFrame(
+      left.sparkSession,
+      logicalPlan,
+      ExpressionEncoder(logicalPlan.schema)
+    )
   }
 }
 
