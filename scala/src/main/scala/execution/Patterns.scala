@@ -109,10 +109,9 @@ object PITJoinExtractEquality extends ExtractEqualityKeys {
     val equiJoinKeys = getEquiJoinKeys(predicates, join.left, join.right)
 
     if (predicates.length != equiJoinKeys.length) {
-      logDebug(
-        s"Could not extract all equi-join keys from join condition: ${join.condition}"
+      throw new IllegalArgumentException(
+        "Besides the PIT key, only equi-conditions are supported for PIT joins"
       )
-      return None
     }
     val leftPitKey =
       if (canEvaluate(join.pitCondition.children.head, join.left))
