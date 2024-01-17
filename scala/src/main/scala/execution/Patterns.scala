@@ -135,7 +135,7 @@ object PITJoinExtractEquality extends ExtractEqualityKeys {
         rightPitKey,
         leftEquiKeys,
         rightEquiKeys,
-        otherPredicates.reduceOption(And),
+        None,
         join.returnNulls,
         join.tolerance,
         join.left,
