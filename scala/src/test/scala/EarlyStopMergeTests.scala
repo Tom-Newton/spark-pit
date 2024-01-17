@@ -35,7 +35,6 @@ import data.SmallDataSortMerge
 import io.github.ackuq.pit.execution.CustomStrategy
 
 class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
-  EarlyStopSortMerge.init(spark)
   val smallData = new SmallDataSortMerge(spark)
 
   def testBothCodegenAndInterpreted(name: String)(f: => Unit): Unit = {
@@ -407,26 +406,19 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     leftDataFrame.show()
     rightDataFrame.show()
 
-    var pitJoin = applyPITJoin(leftDataFrame).pitJoin(
+    var pitJoin = applyPITJoin(leftDataFrame)
+      .pitJoin(
         rightDataFrame,
-        leftDataFrame("ts") >= rightDataFrame("ts"),
-        leftDataFrame("id") === rightDataFrame("id")
+        leftDataFrame("ts"),
+        rightDataFrame("ts"),
+        leftDataFrame("id") === rightDataFrame("id"),
+        "inner",
+        0
       )
-      
-    pitJoin.show()
-    pitJoin = pitJoin.filter(rightDataFrame("value") === lit("1x"))
-    
-    pitJoin.show()
+      .filter(rightDataFrame("value") === lit("1x"))
 
-
-    pitJoin.explain(true)
-    pitJoin.printSchema()
-    pitJoin.show()
-
-    // expectedDataFrame.show()
-
-    // assert(pitJoin.schema.equals(expectedSchema))
-    // assert(pitJoin.collect().sameElements(expectedDataFrame.collect()))
+    assert(pitJoin.schema.equals(smallData.PIT_2_schema))
+    assert(pitJoin.collect().sameElements(smallData.PIT_3_1_FILTERED.collect()))
   }
 
   testBothCodegenAndInterpreted(
@@ -467,19 +459,19 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
   // testBothCodegenAndInterpreted("left_join_three_dataframes") {
   //   testJoiningThreeDataframes("left", smallData.PIT_3_OUTER_schema)
   // }
-  
-  testBothCodegenAndInterpreted("fail_during_planning_for_non_equi_condition") {
-    val fg1 = smallData.fg1
-    val fg2 = smallData.fg2
 
-    val pitJoin =
-      fg1.join(
-        fg2,
-        pit(fg1("ts"), fg2("ts"), lit(0)) && fg1("id") === fg2("id") && fg1("value") > fg2("value"),
-        "inner"
-      )
-    intercept[IllegalArgumentException] {
-      pitJoin.explain()
-    }
-  }
+  // testBothCodegenAndInterpreted("fail_during_planning_for_non_equi_condition") {
+  //   val fg1 = smallData.fg1
+  //   val fg2 = smallData.fg2
+
+  //   val pitJoin =
+  //     fg1.join(
+  //       fg2,
+  //       pit(fg1("ts"), fg2("ts"), lit(0)) && fg1("id") === fg2("id") && fg1("value") > fg2("value"),
+  //       "inner"
+  //     )
+  //   intercept[IllegalArgumentException] {
+  //     pitJoin.explain()
+  //   }
+  // }
 }

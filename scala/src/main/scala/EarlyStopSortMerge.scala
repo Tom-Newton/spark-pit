@@ -37,11 +37,41 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashSet
 
 import execution.CustomStrategy
-import logical.PITRule
 import logical.PITJoin
 
 object EarlyStopSortMerge {
   implicit class applyPITJoin(df: DataFrame) {
+    def pitJoin(
+        right: DataFrame,
+        leftPitExpression: Column,
+        rightPitExpression: Column,
+        joinType: String,
+        tolerance: Long
+    ): DataFrame = pitJoin(
+      right,
+      leftPitExpression,
+      rightPitExpression,
+      None,
+      joinType,
+      tolerance,
+    )
+
+    def pitJoin(
+        right: DataFrame,
+        leftPitExpression: Column,
+        rightPitExpression: Column,
+        joinExprs: Column,
+        joinType: String,
+        tolerance: Long
+    ): DataFrame = pitJoin(
+      right,
+      leftPitExpression,
+      rightPitExpression,
+      Some(joinExprs),
+      joinType,
+      tolerance,
+    )
+
     def pitJoin(
         right: DataFrame,
         leftPitExpression: Column,
