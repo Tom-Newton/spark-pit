@@ -40,7 +40,6 @@ import execution.CustomStrategy
 import logical.PITJoin
 
 object EarlyStopSortMerge {
-  // implicit class PITDataFrame(df: DataFrame) {
   def joinPIT(
       left: DataFrame,
       right: DataFrame,
@@ -112,12 +111,8 @@ object EarlyStopSortMerge {
   }
 }
 
-class YourExtensions extends SparkSessionExtensionsProvider {
+class SparkPIT extends SparkSessionExtensionsProvider {
   override def apply(extensions: SparkSessionExtensions): Unit = {
-    // extensions.injectResolutionRule { session => }
-    // extensions.injectFunction()
-    // extensions.injectPostHocResolutionRule(session => PITRule)
     extensions.injectPlannerStrategy(session => CustomStrategy)
-    // extensions.injectResolutionRule(session => PITRule)
   }
 }

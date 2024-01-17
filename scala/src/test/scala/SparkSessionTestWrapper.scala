@@ -33,7 +33,7 @@ trait SparkSessionTestWrapper {
     .appName("Spark PIT Tests")
     .config("spark.ui.showConsoleProgress", value = false)
     .config("spark.sql.shuffle.partitions", 1)
-    .config("spark.sql.extensions", "io.github.ackuq.pit.YourExtensions")
+    .config("spark.sql.extensions", "io.github.ackuq.pit.SparkPIT")
     .getOrCreate()
 
   spark.sparkContext.setLogLevel("ERROR")
