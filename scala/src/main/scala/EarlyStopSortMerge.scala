@@ -46,15 +46,15 @@ object EarlyStopSortMerge {
       leftPitExpression: Column,
       rightPitExpression: Column,
       joinType: String,
-      tolerance: Long
+      tolerance: Long,
   ): DataFrame = joinPIT(
     left,
     right,
     leftPitExpression,
     rightPitExpression,
-    tolerance,
     None,
-    joinType
+    joinType,
+    tolerance,
   )
 
   def joinPIT(
@@ -62,17 +62,17 @@ object EarlyStopSortMerge {
       right: DataFrame,
       leftPitExpression: Column,
       rightPitExpression: Column,
-      tolerance: Long,
       joinExprs: Column,
-      joinType: String
+      joinType: String,
+      tolerance: Long,
   ): DataFrame = joinPIT(
     left,
     right,
     leftPitExpression,
     rightPitExpression,
-    tolerance,
     Some(joinExprs),
-    joinType
+    joinType,
+    tolerance,
   )
 
   def joinPIT(
@@ -80,9 +80,9 @@ object EarlyStopSortMerge {
       right: DataFrame,
       leftPitExpression: Column,
       rightPitExpression: Column,
-      tolerance: Long,
       joinExprs: Option[Column],
-      joinType: String
+      joinType: String,
+      tolerance: Long,
   ): DataFrame = {
 
     val parsedJoinType = JoinType(joinType)
