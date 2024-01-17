@@ -24,90 +24,56 @@
 
 package io.github.ackuq.pit
 
+import org.apache.spark.sql.Row
+import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.encoders._
+import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.expressions.UserDefinedFunction
+import org.apache.spark.sql.functions.udf
+import org.apache.spark.sql.catalyst.plans.{Inner, LeftOuter, JoinType}
+
+import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.HashSet
+
 import execution.CustomStrategy
 import logical.PITRule
 import logical.PITJoin
 
-import org.apache.spark.sql.expressions.UserDefinedFunction
-import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.encoders._
-import org.apache.spark.sql.functions.udf
-// import org.apache.spark.sql.{
-//   functions,
-//   Column,
-//   SparkSession,
-//   Dataset,
-//   DataFrame,
-//   Encoder,
-//   SparkSessionExtensionsProvider,
-//   SparkSessionExtensions
-// }
-import org.apache.spark.sql._
-
-import scala.collection.mutable.{ArrayBuffer, HashSet}
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.Row
-
 object EarlyStopSortMerge {
-  private final val PIT_FUNCTION = (
-      _: Column,
-      _: Column,
-      _: Long
-  ) => false
-  final val PIT_UDF_NAME = "PIT"
-  final val pit: UserDefinedFunction = udf(PIT_FUNCTION).withName(PIT_UDF_NAME)
-
-  def init(spark: SparkSession): Unit = {
-    // if (!spark.catalog.functionExists(PIT_UDF_NAME)) {
-    //   spark.udf.register(PIT_UDF_NAME, pit)
-    // }
-    // if (!spark.experimental.extraStrategies.contains(CustomStrategy)) {
-    //   spark.experimental.extraStrategies =
-    //     spark.experimental.extraStrategies :+ CustomStrategy
-    // }
-    // if (!spark.experimental.extraOptimizations.contains(PITRule)) {
-    //   spark.experimental.extraOptimizations =
-    //     spark.experimental.extraOptimizations :+ PITRule
-    // }
-  }
-
-  // For the PySpark API
-  def getPit: UserDefinedFunction = pit
-
-  // implicit class AlreadySortedWrapper(df: DataFrame) {
-  //   def alreadySorted(columnNames: Seq[String]): DataFrame = {
-  //     val columns = columnNames.map(col(_).expr.asInstanceOf[Attribute])
-
-  //     val l = AlreadySorted(columns, df.queryExecution.analyzed)
-  //     val e = RowEncoder(df.schema)
-
-  //     new DataFrame(df.sparkSession, l, e)
-  //   }
-  // }
-
   implicit class applyPITJoin(df: DataFrame) {
     def pitJoin(
         right: DataFrame,
-        pitCondition: Expression
+        leftPitExpression: Column,
+        rightPitExpression: Column,
+        joinExprs: Option[Column],
+        joinType: String,
+        tolerance: Long
     ): DataFrame = {
-      // val leftColumns = leftColumnNames.map(
-      //   col(_).expr.asInstanceOf[Attribute])
-      // val rightColumns = rightColumnNames.map(
-      //   col(_).expr.asInstanceOf[Attribute])
+
+      val parsedJoinType = JoinType(joinType)
+      parsedJoinType match {
+        case LeftOuter | Inner => ()
+        case x =>
+          throw new IllegalArgumentException(
+            s"Join type $x not supported for PIT joins"
+          )
+      }
 
       val logicalPlan = PITJoin(
         df.queryExecution.analyzed,
         right.queryExecution.analyzed,
-        pitCondition,
-        false,
-        0L,
-        None,
+        leftPitExpression.expr,
+        rightPitExpression.expr,
+        parsedJoinType == LeftOuter,
+        tolerance,
+        joinExprs.map(_.expr)
       )
-      // // df.sparkSession.withActive {
-      //   val qe = df.sparkSession.sessionState.executePlan(logicalPlan)
-      //   qe.assertAnalyzed()
-        new DataFrame(df.sparkSession, logicalPlan, ExpressionEncoder(logicalPlan.schema))
-      // }
+      new DataFrame(
+        df.sparkSession,
+        logicalPlan,
+        ExpressionEncoder(logicalPlan.schema)
+      )
     }
   }
 }

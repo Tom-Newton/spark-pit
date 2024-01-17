@@ -30,8 +30,9 @@ import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.types.StructType
 import org.scalatest.flatspec.AnyFlatSpec
 
-import EarlyStopSortMerge.pit
+import EarlyStopSortMerge._
 import data.SmallDataSortMerge
+import io.github.ackuq.pit.execution.CustomStrategy
 
 class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
   EarlyStopSortMerge.init(spark)
@@ -406,16 +407,10 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     leftDataFrame.show()
     rightDataFrame.show()
 
-    var pitJoin =
-      leftDataFrame.join(
+    var pitJoin = applyPITJoin(leftDataFrame).pitJoin(
         rightDataFrame,
-        pit(
-          leftDataFrame("ts"),
-          rightDataFrame("ts"),
-          lit(0)
-        ) && 
-        leftDataFrame("id") === rightDataFrame("id"),
-        "left"
+        leftDataFrame("ts") >= rightDataFrame("ts"),
+        leftDataFrame("id") === rightDataFrame("id")
       )
       
     pitJoin.show()
