@@ -103,7 +103,7 @@ object EarlyStopSortMerge {
     new DataFrame(
       left.sparkSession,
       logicalPlan,
-      ExpressionEncoder(logicalPlan.schema)
+      RowEncoder(logicalPlan.schema)
     )
   }
 }
