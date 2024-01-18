@@ -30,7 +30,7 @@ import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.types.StructType
 import org.scalatest.flatspec.AnyFlatSpec
 
-import EarlyStopSortMerge._
+import EarlyStopSortMerge.joinPIT
 import data.SmallDataSortMerge
 import io.github.ackuq.pit.execution.CustomStrategy
 

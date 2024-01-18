@@ -99,7 +99,7 @@ object PITJoinExtractEquality extends ExtractEqualityKeys {
   )
 
   def unapply(join: PITJoin): Option[ReturnType] = {
-    logDebug(s"Considering PIT join on")
+    logDebug(s"Considering PIT join")
 
     val predicates =
       join.condition.map(splitConjunctivePredicates).getOrElse(Nil)
