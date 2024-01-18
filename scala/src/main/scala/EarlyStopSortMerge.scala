@@ -24,17 +24,14 @@
 
 package io.github.ackuq.pit
 
-import org.apache.spark.sql.Row
-import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.encoders._
-import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.expressions.UserDefinedFunction
-import org.apache.spark.sql.functions.udf
+import org.apache.spark.sql.{
+  Column,
+  DataFrame,
+  SparkSessionExtensionsProvider,
+  SparkSessionExtensions
+}
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.plans.{Inner, LeftOuter, JoinType}
-
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.HashSet
 
 import execution.CustomStrategy
 import logical.PITJoin
@@ -46,7 +43,7 @@ object EarlyStopSortMerge {
       leftPitExpression: Column,
       rightPitExpression: Column,
       joinType: String,
-      tolerance: Long,
+      tolerance: Long
   ): DataFrame = joinPIT(
     left,
     right,
@@ -54,7 +51,7 @@ object EarlyStopSortMerge {
     rightPitExpression,
     None,
     joinType,
-    tolerance,
+    tolerance
   )
 
   def joinPIT(
@@ -64,7 +61,7 @@ object EarlyStopSortMerge {
       rightPitExpression: Column,
       joinExprs: Column,
       joinType: String,
-      tolerance: Long,
+      tolerance: Long
   ): DataFrame = joinPIT(
     left,
     right,
@@ -72,7 +69,7 @@ object EarlyStopSortMerge {
     rightPitExpression,
     Some(joinExprs),
     joinType,
-    tolerance,
+    tolerance
   )
 
   def joinPIT(
@@ -82,7 +79,7 @@ object EarlyStopSortMerge {
       rightPitExpression: Column,
       joinExprs: Option[Column],
       joinType: String,
-      tolerance: Long,
+      tolerance: Long
   ): DataFrame = {
 
     val parsedJoinType = JoinType(joinType)
