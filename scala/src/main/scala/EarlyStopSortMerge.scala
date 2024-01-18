@@ -30,7 +30,7 @@ import org.apache.spark.sql.{
   SparkSessionExtensionsProvider,
   SparkSessionExtensions
 }
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.plans.{Inner, LeftOuter, JoinType}
 
 import execution.CustomStrategy
