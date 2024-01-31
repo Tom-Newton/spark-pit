@@ -12,6 +12,8 @@ lazy val root = (project in file("."))
   )
 
 libraryDependencies ++= Seq(
+  "com.esotericsoftware.kryo" % "kryo" % "2.24.0",
+  "org.slf4j" % "slf4j-api" % "2.0.6",
   "org.scalactic" %% "scalactic" % "3.2.12",
   "org.scalatest" %% "scalatest" % "3.2.12" % "test"
 )
