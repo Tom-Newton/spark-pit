@@ -20,3 +20,4 @@ libraryDependencies ++= Seq(
 
 // For Databricks 14.3 we need to compile against old java. Java 11 works
 // `sbt -java-home /usr/lib/jvm/java-11-openjdk-amd64/ package`
+// It also requires adding Databricks compatible jars to `scala/lib`.
