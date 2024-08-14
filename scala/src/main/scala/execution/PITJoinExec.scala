@@ -553,7 +553,7 @@ protected[pit] case class PITJoinExec(
     (leftRow, matched)
   }
 
-  override def needCopyResult: Boolean = true
+  override def needCopyResult(ctx: CodegenContext): String = "true"
 
   override protected def doProduce(ctx: CodegenContext): String = {
     // Inline mutable state since not many join operations in a task
