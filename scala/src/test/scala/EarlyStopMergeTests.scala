@@ -24,102 +24,458 @@
 
 package io.github.ackuq.pit
 
-import EarlyStopSortMerge.pit
-import data.SmallDataSortMerge
-
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
 import org.apache.spark.sql.functions.lit
+import org.apache.spark.sql.types.StructType
 import org.scalatest.flatspec.AnyFlatSpec
 
+import EarlyStopSortMerge.joinPIT
+import data.SmallDataSortMerge
+import io.github.ackuq.pit.execution.CustomStrategy
+
 class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
-  EarlyStopSortMerge.init(spark)
   val smallData = new SmallDataSortMerge(spark)
 
-  it should "Perform a PIT join with two dataframes, aligned timestamps" in {
-    val fg1 = smallData.fg1
-    val fg2 = smallData.fg2
+  def testBothCodegenAndInterpreted(name: String)(f: => Unit): Unit = {
+    it should (s"codegen__$name") in {
+      spark.conf.set("spark.sql.codegen.wholeStage", "true")
+      spark.conf.set("spark.sql.codegen.factoryMode", "CODEGEN_ONLY")
+      f
+    }
 
-    val pitJoin =
-      fg1.join(
-        fg2,
-        pit(fg1("ts"), fg2("ts"), lit(0)) && fg1("id") === fg2("id")
-      )
-
-    assert(!pitJoin.isEmpty)
-    // Assert same schema
-    assert(pitJoin.schema.equals(smallData.PIT_1_2.schema))
-    // Assert same elements
-    assert(pitJoin.collect().sameElements(smallData.PIT_1_2.collect()))
+    it should (s"interpreted__$name") in {
+      spark.conf.set("spark.sql.codegen.wholeStage", "false")
+      spark.conf.set("spark.sql.codegen.factoryMode", "NO_CODEGEN")
+      f
+    }
   }
 
-  it should "Perform a PIT join with two dataframes, misaligned timestamps" in {
-    val fg1 = smallData.fg1
-    val fg2 = smallData.fg3
+  def testSearchingBackwardForMatches(
+      joinType: String,
+      leftDataFrame: DataFrame,
+      rightDataFrame: DataFrame,
+      expectedDataFrame: DataFrame,
+      expectedSchema: StructType,
+      tolerance: Int
+  ): Unit = {
 
-    val pitJoin =
-      fg1.join(
-        fg2,
-        pit(fg1("ts"), fg2("ts"), lit(0)) && fg1("id") === fg2("id")
-      )
+    leftDataFrame.show()
+    rightDataFrame.show()
 
-    assert(!pitJoin.isEmpty)
-    // Assert same schema
-    assert(pitJoin.schema.equals(smallData.PIT_1_3.schema))
-    // Assert same elements
-    assert(pitJoin.collect().sameElements(smallData.PIT_1_3.collect()))
+    val pitJoin = joinPIT(
+      leftDataFrame,
+      rightDataFrame,
+      leftDataFrame("ts"),
+      rightDataFrame("ts"),
+      leftDataFrame("id") === rightDataFrame("id"),
+      joinType,
+      tolerance,
+    )
+
+    pitJoin.explain("codegen")
+    pitJoin.printSchema()
+    pitJoin.show()
+
+    expectedDataFrame.show()
+
+    assert(pitJoin.schema.equals(expectedSchema))
+    assert(pitJoin.collect().sameElements(expectedDataFrame.collect()))
   }
 
-  it should "Perform a PIT join with three dataframes, misaligned timestamps" in {
+  testBothCodegenAndInterpreted(
+    "inner_join_with_aligned_timestamps_no_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1,
+      smallData.fg2,
+      smallData.PIT_1_2,
+      smallData.PIT_2_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_with_aligned_timestamps_no_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg1,
+      smallData.fg2,
+      smallData.PIT_1_2,
+      smallData.PIT_2_OUTER_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_with_aligned_timestamps_with_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1,
+      smallData.fg2,
+      smallData.PIT_1_2,
+      smallData.PIT_2_schema,
+      1
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_with_aligned_timestamps_with_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg1,
+      smallData.fg2,
+      smallData.PIT_1_2,
+      smallData.PIT_2_OUTER_schema,
+      1
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_searching_backward_for_matches_no_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1,
+      smallData.fg3,
+      smallData.PIT_1_3,
+      smallData.PIT_2_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_searching_backward_for_matches_no_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg1,
+      smallData.fg3,
+      smallData.PIT_1_3,
+      smallData.PIT_2_OUTER_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_searching_backward_for_matches_with_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1,
+      smallData.fg3,
+      smallData.PIT_1_3_T1,
+      smallData.PIT_2_schema,
+      1
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_searching_backward_for_matches_with_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg1,
+      smallData.fg3,
+      smallData.PIT_1_3_T1_OUTER,
+      smallData.PIT_2_OUTER_schema,
+      1
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_some_rows_have_no_backwards_match"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg3,
+      smallData.fg1,
+      smallData.PIT_3_1,
+      smallData.PIT_2_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_some_rows_have_no_backwards_match"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg3,
+      smallData.fg1,
+      smallData.PIT_3_1_OUTER,
+      smallData.PIT_2_OUTER_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_right_dataframe_is_empty"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1,
+      smallData.empty,
+      smallData.PIT_EMPTY,
+      smallData.PIT_2_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_right_dataframe_is_empty"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg1,
+      smallData.empty,
+      smallData.PIT_1_EMPTY_OUTER,
+      smallData.PIT_2_OUTER_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_left_dataframe_is_empty"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1,
+      smallData.empty,
+      smallData.PIT_EMPTY,
+      smallData.PIT_2_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_left_dataframe_is_empty"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.empty,
+      smallData.fg1,
+      smallData.PIT_EMPTY,
+      smallData.PIT_2_OUTER_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_both_dataframes_are_empty"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.empty,
+      smallData.empty2, // Don't want to test self join
+      smallData.PIT_EMPTY,
+      smallData.PIT_2_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_both_dataframes_are_empty"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.empty,
+      smallData.empty2, // Don't want to test self join
+      smallData.PIT_EMPTY,
+      smallData.PIT_2_OUTER_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_preserves_input_nulls"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg3_with_value_nulls,
+      smallData.fg1_with_value_nulls,
+      smallData.PIT_3_1_WITH_NULLS,
+      smallData.PIT_2_NULLABLE_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_preserves_input_nulls"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg3_with_value_nulls,
+      smallData.fg1_with_value_nulls,
+      smallData.PIT_3_1_WITH_NULLS_OUTER,
+      smallData.PIT_2_NULLABLE_OUTER_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_preserves_input_nulls_with_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg3_with_value_nulls,
+      smallData.fg1_with_value_nulls,
+      smallData.PIT_3_1_T1_WITH_NULLS,
+      smallData.PIT_2_NULLABLE_schema,
+      1
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_preserves_input_nulls_with_tolerance"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg3_with_value_nulls,
+      smallData.fg1_with_value_nulls,
+      smallData.PIT_3_1_T1_WITH_NULLS_OUTER,
+      smallData.PIT_2_NULLABLE_OUTER_schema,
+      1
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_nulls_in_join_keys"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1_with_key_nulls,
+      smallData.fg3_with_key_nulls,
+      smallData.PIT_1_3_WITH_KEY_NULLS,
+      // It could be argued the correct schema would be `smallData.PIT_2_schema`,
+      // i.e. with join key columns made non-nullable. However, the normal spark inner
+      // join does not do this, so we don't either.
+      smallData.PIT_2_NULLABLE_KEYS_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_nulls_in_join_key"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg1_with_key_nulls,
+      smallData.fg3_with_key_nulls,
+      smallData.PIT_1_3_WITH_KEY_NULLS_OUTER,
+      smallData.PIT_2_NULLABLE_KEYS_OUTER_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_duplicate_join_keys"
+  ) {
+    testSearchingBackwardForMatches(
+      "inner",
+      smallData.fg1_duplicates,
+      smallData.fg3_duplicates,
+      smallData.PIT_1_3_DUPLICATES,
+      smallData.PIT_2_schema,
+      0
+    )
+  }
+
+  testBothCodegenAndInterpreted(
+    "left_join_duplicate_join_keys"
+  ) {
+    testSearchingBackwardForMatches(
+      "left",
+      smallData.fg1_duplicates,
+      smallData.fg3_duplicates,
+      smallData.PIT_1_3_DUPLICATES,
+      smallData.PIT_2_OUTER_schema,
+      0
+    )
+  }
+
+  def testJoinThenFilter() {
+    val leftDataFrame = smallData.fg3
+    val rightDataFrame = smallData.fg1
+
+    var pitJoin = joinPIT(
+      leftDataFrame,
+      rightDataFrame,
+      leftDataFrame("ts"),
+      rightDataFrame("ts"),
+      leftDataFrame("id") === rightDataFrame("id"),
+      "inner",
+      0,
+    ).filter(rightDataFrame("value") === lit("1x"))
+
+    assert(pitJoin.schema.equals(smallData.PIT_2_schema))
+    assert(pitJoin.collect().sameElements(smallData.PIT_3_1_FILTERED.collect()))
+  }
+
+  testBothCodegenAndInterpreted(
+    "inner_join_then_filter"
+  ) {
+    testJoinThenFilter()
+  }
+
+  def testJoiningThreeDataframes(
+      joinType: String,
+      expectedSchema: StructType
+  ): Unit = {
     val fg1 = smallData.fg1
     val fg2 = smallData.fg2
     val fg3 = smallData.fg3
 
-    val left =
-      fg1.join(
-        fg2,
-        pit(fg1("ts"), fg2("ts"), lit(0)) && fg1("id") === fg2("id")
-      )
+    val left = joinPIT(
+      fg1,
+      fg2,
+      fg1("ts"),
+      fg2("ts"),
+      fg1("id") === fg2("id"),
+      joinType,
+      0,
+    )
 
-    val pitJoin =
-      left.join(
-        fg3,
-        pit(fg1("ts"), fg3("ts"), lit(0)) && fg1("id") === fg3("id")
-      )
+    val pitJoin = joinPIT(
+      left,
+      fg3,
+      fg1("ts"),
+      fg3("ts"),
+      fg1("id") === fg3("id"),
+      joinType,
+      0,
+    )
 
-    assert(!pitJoin.isEmpty)
-    // Assert same schema
-    assert(pitJoin.schema.equals(smallData.PIT_1_2_3.schema))
-    // Assert same elements
+    assert(pitJoin.schema.equals(expectedSchema))
     assert(pitJoin.collect().sameElements(smallData.PIT_1_2_3.collect()))
   }
 
-  it should "Be able to perform a PIT join with tolerance, misaligned timestamps" in {
-    val fg1 = smallData.fg1
-    val fg2 = smallData.fg3
-
-    val pitJoin = fg1.join(
-      fg2,
-      pit(fg1("ts"), fg2("ts"), lit(1)) && fg1("id") === fg2("id")
-    )
-    assert(!pitJoin.isEmpty)
-    // Assert same schema
-    assert(pitJoin.schema.equals(smallData.PIT_1_3_T1.schema))
-    // Assert same elements
-    assert(pitJoin.collect().sameElements(smallData.PIT_1_3_T1.collect()))
+  testBothCodegenAndInterpreted("inner_join_three_dataframes") {
+    testJoiningThreeDataframes("inner", smallData.PIT_3_schema)
+  }
+  testBothCodegenAndInterpreted("left_join_three_dataframes") {
+    testJoiningThreeDataframes("left", smallData.PIT_3_OUTER_schema)
   }
 
-  it should "Be able to perform a left outer PIT join with tolerance, misaligned timestamps" in {
+  testBothCodegenAndInterpreted("fail_during_planning_for_non_equi_condition") {
     val fg1 = smallData.fg1
-    val fg2 = smallData.fg3
+    val fg2 = smallData.fg2
 
-    val pitJoin = fg1.join(
+    val pitJoin = joinPIT(
+      fg1,
       fg2,
-      pit(fg1("ts"), fg2("ts"), lit(1)) && fg1("id") === fg2("id"),
-      "left"
+      fg1("ts"),
+      fg2("ts"),
+      (fg1("id") === fg2("id") && fg1("value") > fg2("value")),
+      "inner",
+      0,
     )
-    assert(!pitJoin.isEmpty)
-    // Assert same schema
-    assert(pitJoin.schema.equals(smallData.PIT_1_3_T1_OUTER.schema))
-    // Assert same elements
-    assert(pitJoin.collect().sameElements(smallData.PIT_1_3_T1_OUTER.collect()))
+    intercept[IllegalArgumentException] {
+      pitJoin.explain()
+    }
   }
 }

@@ -12,6 +12,8 @@ scala/project/target/
 scala/project/project/target/
 scala/target/stream/*
 scala/src/test/scala/Playground.scala
+# Avoid checking in proprietary jars
+scala/lib
 .bsp
 
 # ignore build files

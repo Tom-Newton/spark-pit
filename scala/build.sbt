@@ -3,7 +3,7 @@ val versionNumber = IO.readLines(new File(versionNumberFile))
 
 ThisBuild / version := versionNumber.head
 
-ThisBuild / scalaVersion := "2.12.15"
+ThisBuild / scalaVersion := "2.13.12"
 
 lazy val root = (project in file("."))
   .settings(
@@ -12,8 +12,8 @@ lazy val root = (project in file("."))
   )
 
 libraryDependencies ++= Seq(
-  "org.apache.spark" %% "spark-core" % "3.2.1" % "provided",
-  "org.apache.spark" %% "spark-sql" % "3.2.1" % "provided",
-  "org.scalactic" %% "scalactic" % "3.2.12",
-  "org.scalatest" %% "scalatest" % "3.2.12" % "test"
+  "org.apache.spark" %% "spark-core" % "4.0.0-preview1" % "provided",
+  "org.apache.spark" %% "spark-sql" % "4.0.0-preview1" % "provided",
+  "org.scalactic" %% "scalactic" % "3.2.19",
+  "org.scalatest" %% "scalatest" % "3.2.19" % "test"
 )

@@ -22,4 +22,26 @@
 # SOFTWARE.
 #
 
-from ackuq.pit.joinPIT import joinPIT  # noqa: F401
+from pyspark.sql import Column, DataFrame, SparkSession
+
+
+def joinPIT(
+    spark: SparkSession,
+    left: DataFrame,
+    right: DataFrame,
+    leftPitKey: Column,
+    rightPitKey: Column,
+    on: Column,
+    how: str = "inner",
+    tolerance: int = 0,
+) -> DataFrame:
+    jdf = spark.sparkContext._jvm.io.github.ackuq.pit.EarlyStopSortMerge.joinPIT(
+        left._jdf,
+        right._jdf,
+        leftPitKey._jc,
+        rightPitKey._jc,
+        on._jc,
+        how,
+        tolerance,
+    )
+    return DataFrame(jdf, spark)
