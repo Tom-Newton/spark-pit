@@ -28,9 +28,12 @@ import unittest
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructField, StructType
 
+from ackuq.pit import PITContext
+
 
 class SparkTests(unittest.TestCase):
     spark: SparkSession
+    pit_context: PITContext
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -45,6 +48,7 @@ class SparkTests(unittest.TestCase):
             .config("spark.sql.extensions", "io.github.ackuq.pit.SparkPIT")
             .getOrCreate()
         )
+        cls.pit_context = PITContext(cls.spark)
 
     @classmethod
     def tearDownClass(cls) -> None:

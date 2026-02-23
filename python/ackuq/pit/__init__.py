@@ -22,4 +22,5 @@
 # SOFTWARE.
 #
 
+from ackuq.pit.context import PITContext  # noqa: F401
 from ackuq.pit.joinPIT import joinPIT  # noqa: F401
