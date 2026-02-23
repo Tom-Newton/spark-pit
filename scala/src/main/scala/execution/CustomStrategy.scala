@@ -25,18 +25,17 @@
 package io.github.ackuq.pit
 package execution
 
-import org.apache.spark.sql.Strategy
 import org.apache.spark.sql.catalyst.expressions.{PredicateHelper, RowOrdering}
 import org.apache.spark.sql.catalyst.optimizer.JoinSelectionHelper
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.{SparkPlan, SparkStrategy}
 
 protected[pit] object CustomStrategy
-    extends Strategy
+    extends SparkStrategy
     with PredicateHelper
     with JoinSelectionHelper {
 
-  def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
+  override def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
     case PITJoinExtractEquality(
           leftPitKey,
           rightPitKey,
