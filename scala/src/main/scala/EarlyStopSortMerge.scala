@@ -101,6 +101,7 @@ object EarlyStopSortMerge {
       tolerance,
       joinExprs.map(_.expr)
     )
+    // Copying `Dataset.ofRows()`, but using a public constructor for DataFrame (Dataset[Row]).
     new DataFrame(
       left.sparkSession,
       logicalPlan,
