@@ -36,8 +36,8 @@ import org.apache.spark.sql.execution.metric.SQLMetrics
 
 import logical.{CustomJoinType, PITJoinType}
 
-/** Performs a PIT join of two child relations.
-  */
+
+// Based on org.apache.spark.sql.execution.joins.SortMergeJoinExec
 protected[pit] case class PITJoinExec(
     leftPitKeys: Seq[Expression],
     rightPitKeys: Seq[Expression],
@@ -48,15 +48,7 @@ protected[pit] case class PITJoinExec(
     right: SparkPlan,
     returnNulls: Boolean,
     tolerance: Long
-) extends ShuffledJoin
-    with CodegenSupport {
-
-  override def isSkewJoin: Boolean = false
-
-  override protected def withNewChildrenInternal(
-      newLeft: SparkPlan,
-      newRight: SparkPlan
-  ): PITJoinExec = copy(left = newLeft, right = newRight)
+) extends ShuffledJoin {
 
   override lazy val metrics: Map[String, SQLMetric] = Map(
     "numOutputRows" -> SQLMetrics.createMetric(
@@ -64,38 +56,6 @@ protected[pit] case class PITJoinExec(
       "number of output rows"
     )
   )
-
-  override def nodeName: String = {
-    super.nodeName
-  }
-
-  override def stringArgs: Iterator[Any] =
-    super.stringArgs.toSeq.dropRight(1).iterator
-
-  override def requiredChildDistribution: Seq[Distribution] = {
-    if (leftEquiKeys.isEmpty || rightEquiKeys.isEmpty) {
-      // TODO: This should be improved, but for now just keep everything in one partition
-      AllTuples :: AllTuples :: Nil
-    } else {
-      ClusteredDistribution(leftEquiKeys) :: ClusteredDistribution(
-        rightEquiKeys
-      ) :: Nil
-    }
-  }
-
-  val customJoinType: CustomJoinType = PITJoinType
-
-  // Set as inner
-  override def joinType: JoinType = Inner
-
-  override def outputPartitioning: Partitioning = customJoinType match {
-    // Left and right output partitioning should equal in the results
-    case PITJoinType => left.outputPartitioning
-    case x =>
-      throw new IllegalArgumentException(
-        s"${getClass.getSimpleName} not take $x as the JoinType"
-      )
-  }
 
   override def outputOrdering: Seq[SortOrder] = customJoinType match {
     // For PIT join, the order should be in descending time order for both sides
@@ -106,9 +66,7 @@ protected[pit] case class PITJoinExec(
       )
   }
 
-  override def leftKeys: Seq[Expression] = leftEquiKeys ++ leftPitKeys
-
-  /** The utility method to get output ordering for left or right side of the
+    /** The utility method to get output ordering for left or right side of the
     * join.
     *
     * Returns the required ordering for left or right child if
@@ -125,7 +83,7 @@ protected[pit] case class PITJoinExec(
     if (SortOrder.orderingSatisfies(childOutputOrdering, requiredOrdering)) {
       keys.zip(childOutputOrdering).map { case (key, childOrder) =>
         val sameOrderExpressionsSet = ExpressionSet(childOrder.children) - key
-        // Changed to descending
+        // Compared to SortMergeJoinExec the only difference is using descending order.
         SortOrder(key, Descending, sameOrderExpressionsSet.toSeq)
       }
     } else {
@@ -133,14 +91,48 @@ protected[pit] case class PITJoinExec(
     }
   }
 
-  private def requiredOrders(keys: Seq[Expression]): Seq[SortOrder] = {
-    // This must be descending in order to agree with the `keyOrdering` defined in `doExecute()`.
-    keys.map(SortOrder(_, Descending))
+  override def requiredChildDistribution: Seq[Distribution] = {
+    if (leftEquiKeys.isEmpty || rightEquiKeys.isEmpty) {
+      // TODO: This should be improved, but for now just keep everything in one partition
+      AllTuples :: AllTuples :: Nil
+    } else {
+      ClusteredDistribution(leftEquiKeys) :: ClusteredDistribution(
+        rightEquiKeys
+      ) :: Nil
+    }
   }
 
   override def requiredChildOrdering: Seq[Seq[SortOrder]] =
     requiredOrders(leftKeys) :: requiredOrders(rightKeys) :: Nil
 
+  private def requiredOrders(keys: Seq[Expression]): Seq[SortOrder] = {
+    // This must be descending in order to agree with the `keyOrdering` defined in `doExecute()`.
+    keys.map(SortOrder(_, Descending))
+  }
+
+  override def isSkewJoin: Boolean = false
+
+  override def nodeName: String = {
+    super.nodeName
+  }
+
+  override def stringArgs: Iterator[Any] =
+    super.stringArgs.toSeq.dropRight(1).iterator
+
+
+  val customJoinType: CustomJoinType = PITJoinType
+  override def joinType: JoinType = Inner  // Need to set something valid, for class compatibility
+
+  override def outputPartitioning: Partitioning = customJoinType match {
+    // Left and right output partitioning should equal in the results
+    case PITJoinType => left.outputPartitioning
+    case x =>
+      throw new IllegalArgumentException(
+        s"${getClass.getSimpleName} not take $x as the JoinType"
+      )
+  }
+
+  override def leftKeys: Seq[Expression] = leftEquiKeys ++ leftPitKeys
   override def rightKeys: Seq[Expression] = rightEquiKeys ++ rightPitKeys
 
   protected override def doExecute(): RDD[InternalRow] = {
@@ -238,21 +230,14 @@ protected[pit] case class PITJoinExec(
     }
   }
 
-  /** These generator are for generating for the equi-keys
-    */
-
   private def createLeftEquiKeyGenerator(): Projection =
     UnsafeProjection.create(leftEquiKeys, left.output)
 
   private def createRightEquiKeyGenerator(): Projection =
     UnsafeProjection.create(rightEquiKeys, right.output)
 
-  /** These generator are for generating the PIT keys
-    */
-
-  private def createLeftPITKeyGenerator(): Projection = {
+  private def createLeftPITKeyGenerator(): Projection =
     UnsafeProjection.create(leftPitKeys, left.output)
-  }
 
   private def createRightPITKeyGenerator(): Projection =
     UnsafeProjection.create(rightPitKeys, right.output)
@@ -531,7 +516,7 @@ protected[pit] case class PITJoinExec(
          |      } else if ($tolerance > 0 && ${genToleranceConditions(
           leftPITKeyVars,
           rightPITKeyVars
-        )}) {     
+        )}) {
          |        if($returnNulls) {
          |          $matched = null;
          |          return false;
@@ -552,8 +537,6 @@ protected[pit] case class PITJoinExec(
     )
     (leftRow, matched)
   }
-
-  override def needCopyResult: Boolean = true
 
   override protected def doProduce(ctx: CodegenContext): String = {
     // Inline mutable state since not many join operations in a task
@@ -609,6 +592,13 @@ protected[pit] case class PITJoinExec(
          |""".stripMargin
     }
   }
+
+  override def needCopyResult: Boolean = true
+
+  override protected def withNewChildrenInternal(
+      newLeft: SparkPlan,
+      newRight: SparkPlan
+  ): PITJoinExec = copy(left = newLeft, right = newRight)
 }
 
 /** Helper class that is used to implement [[PITJoinExec]].
