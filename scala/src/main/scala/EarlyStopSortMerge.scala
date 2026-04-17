@@ -30,7 +30,7 @@ import org.apache.spark.sql.{
   SparkSessionExtensions
 }
 import org.apache.spark.sql.classic.DataFrame
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.plans.{Inner, LeftOuter, JoinType}
 
 import execution.CustomStrategy
@@ -108,7 +108,7 @@ object EarlyStopSortMerge {
     new DataFrame(
       sparkSession,
       logicalPlan,
-      ExpressionEncoder(logicalPlan.schema)
+      RowEncoder.encoderFor(logicalPlan.schema)
     )
   }
 }
