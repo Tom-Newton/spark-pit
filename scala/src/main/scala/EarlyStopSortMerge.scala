@@ -36,6 +36,7 @@ import org.apache.spark.sql.catalyst.plans.{Inner, LeftOuter, JoinType}
 import execution.CustomStrategy
 import logical.PITJoin
 
+
 object EarlyStopSortMerge {
   def joinPIT(
       left: DataFrame,
