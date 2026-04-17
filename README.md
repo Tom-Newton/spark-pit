@@ -24,8 +24,8 @@ The thesis that this project laid the foundation for can be found here: http://w
 
 | Dependency      | Version |
 | --------------- | ------- |
-| Spark & PySpark | 3.5.0   |
-| Scala           | 2.12    |
+| Spark & PySpark | 4.1.1   |
+| Scala           | 2.13    |
 | Python          | >=3.6   |
 
 ## Installation

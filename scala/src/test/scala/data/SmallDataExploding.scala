@@ -31,7 +31,8 @@ import org.apache.spark.sql.types.{
   StructField,
   StructType
 }
-import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.apache.spark.sql.classic.{DataFrame, SparkSession}
+import org.apache.spark.sql.Row
 
 class SmallDataExploding(spark: SparkSession) extends SmallData(spark) {
   private val PIT_1_2_RAW = Seq(
