@@ -25,7 +25,7 @@
 package io.github.ackuq.pit
 package execution
 
-import org.apache.spark.sql.Strategy
+import org.apache.spark.sql.classic.Strategy
 import org.apache.spark.sql.catalyst.expressions.{PredicateHelper, RowOrdering}
 import org.apache.spark.sql.catalyst.optimizer.JoinSelectionHelper
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan

@@ -26,10 +26,10 @@ package io.github.ackuq.pit
 
 import org.apache.spark.sql.{
   Column,
-  DataFrame,
   SparkSessionExtensionsProvider,
   SparkSessionExtensions
 }
+import org.apache.spark.sql.classic.DataFrame
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.plans.{Inner, LeftOuter, JoinType}
 
@@ -92,18 +92,21 @@ object EarlyStopSortMerge {
         )
     }
 
+    val sparkSession = left.sparkSession
+    def toExpression(column: Column) = sparkSession.expression(column)
+
     val logicalPlan = PITJoin(
       left.queryExecution.analyzed,
       right.queryExecution.analyzed,
-      leftPitExpression.expr,
-      rightPitExpression.expr,
+      toExpression(leftPitExpression),
+      toExpression(rightPitExpression),
       parsedJoinType == LeftOuter,
       tolerance,
-      joinExprs.map(_.expr)
+      joinExprs.map(toExpression(_))
     )
     // Copying `Dataset.ofRows()`, but using a public constructor for DataFrame (Dataset[Row]).
     new DataFrame(
-      left.sparkSession,
+      sparkSession,
       logicalPlan,
       ExpressionEncoder(logicalPlan.schema)
     )
