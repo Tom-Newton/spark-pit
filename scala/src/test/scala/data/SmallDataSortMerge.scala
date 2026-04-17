@@ -25,9 +25,9 @@
 package io.github.ackuq.pit
 package data
 
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.classic.DataFrame
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.classic.SparkSession
 import org.apache.spark.sql.types.IntegerType
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.types.StructField

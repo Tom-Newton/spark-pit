@@ -24,7 +24,7 @@
 
 package io.github.ackuq.pit
 
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.classic.SparkSession
 
 trait SparkSessionTestWrapper {
   val spark: SparkSession = SparkSession
