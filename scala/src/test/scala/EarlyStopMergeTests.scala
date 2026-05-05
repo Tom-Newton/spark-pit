@@ -24,15 +24,16 @@
 
 package io.github.ackuq.pit
 
-import org.apache.spark.sql.classic.DataFrame
+import io.github.ackuq.pit.execution.CustomStrategy
+import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
+import org.apache.spark.sql.classic.DataFrame
 import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.types.StructType
 import org.scalatest.flatspec.AnyFlatSpec
 
 import EarlyStopSortMerge.joinPIT
 import data.SmallDataSortMerge
-import io.github.ackuq.pit.execution.CustomStrategy
 
 class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
   val smallData = new SmallDataSortMerge(spark)
@@ -459,6 +460,38 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
   }
   testBothCodegenAndInterpreted("left_join_three_dataframes") {
     testJoiningThreeDataframes("left", smallData.PIT_3_OUTER_schema)
+  }
+
+  def testFailNonNumericPITKeys() {
+    val fg1 = smallData.fg1
+    val fg2 = smallData.fg2
+
+    intercept[AnalysisException] {
+      val pitJoin = joinPIT(
+        fg1,
+        fg2,
+        fg1("ts"),
+        fg2("ts").cast("string"),
+        fg1("id") === fg2("id"),
+        "inner",
+        0,
+      )
+    }
+    intercept[AnalysisException] {
+      val pitJoin = joinPIT(
+        fg1,
+        fg2,
+        fg1("ts").cast("string"),
+        fg2("ts"),
+        fg1("id") === fg2("id"),
+        "inner",
+        0,
+      )
+    }
+  }
+
+  testBothCodegenAndInterpreted("fail_for_non_long_pit_key_type") {
+    testFailNonNumericPITKeys()
   }
 
   testBothCodegenAndInterpreted("fail_during_planning_for_non_equi_condition") {
