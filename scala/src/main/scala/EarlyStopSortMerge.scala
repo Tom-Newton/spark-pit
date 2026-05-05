@@ -24,36 +24,117 @@
 
 package io.github.ackuq.pit
 
+import org.apache.spark.sql.AnalysisException
+import org.apache.spark.sql.Column
+import org.apache.spark.sql.SparkSessionExtensions
+import org.apache.spark.sql.SparkSessionExtensionsProvider
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.sql.catalyst.plans.Inner
+import org.apache.spark.sql.catalyst.plans.JoinType
+import org.apache.spark.sql.catalyst.plans.LeftOuter
+import org.apache.spark.sql.classic.DataFrame
+import org.apache.spark.sql.types.NumericType
 import execution.CustomStrategy
-import logical.PITRule
+import logical.PITJoin
 
-import org.apache.spark.sql.expressions.UserDefinedFunction
-import org.apache.spark.sql.functions.udf
-import org.apache.spark.sql.{Column, SparkSession}
 
 object EarlyStopSortMerge {
-  private final val PIT_FUNCTION = (
-      _: Column,
-      _: Column,
-      _: Long
-  ) => true
-  final val PIT_UDF_NAME = "PIT"
-  final val pit: UserDefinedFunction = udf(PIT_FUNCTION).withName(PIT_UDF_NAME)
+  def joinPIT(
+      left: DataFrame,
+      right: DataFrame,
+      leftPitColumn: Column,
+      rightPitColumn: Column,
+      joinType: String,
+      tolerance: Long
+  ): DataFrame = joinPIT(
+    left,
+    right,
+    leftPitColumn,
+    rightPitColumn,
+    None,
+    joinType,
+    tolerance
+  )
 
-  def init(spark: SparkSession): Unit = {
-    if (!spark.catalog.functionExists(PIT_UDF_NAME)) {
-      spark.udf.register(PIT_UDF_NAME, pit)
+  def joinPIT(
+      left: DataFrame,
+      right: DataFrame,
+      leftPitColumn: Column,
+      rightPitColumn: Column,
+      joinExprs: Column,
+      joinType: String,
+      tolerance: Long
+  ): DataFrame = joinPIT(
+    left,
+    right,
+    leftPitColumn,
+    rightPitColumn,
+    Some(joinExprs),
+    joinType,
+    tolerance
+  )
+
+  def joinPIT(
+      left: DataFrame,
+      right: DataFrame,
+      leftPitColumn: Column,
+      rightPitColumn: Column,
+      joinExprs: Option[Column],
+      joinType: String,
+      tolerance: Long
+  ): DataFrame = {
+
+    val parsedJoinType = JoinType(joinType)
+    parsedJoinType match {
+      case LeftOuter | Inner => ()
+      case x =>
+        throw new IllegalArgumentException(
+          s"Join type $x not supported for PIT joins"
+        )
     }
-    if (!spark.experimental.extraStrategies.contains(CustomStrategy)) {
-      spark.experimental.extraStrategies =
-        spark.experimental.extraStrategies :+ CustomStrategy
+
+
+    val sparkSession = left.sparkSession
+    def toExpression(column: Column) = sparkSession.expression(column)
+
+    val leftPitExpression = toExpression(leftPitColumn)
+    val rightPitExpression = toExpression(rightPitColumn)
+
+    Seq("left" -> leftPitExpression.dataType, "right" -> rightPitExpression.dataType).foreach {
+      case (side, dataType) =>
+        if (!dataType.isInstanceOf[NumericType]) {
+          throw new AnalysisException(
+            message = s"PIT key on $side side must be a numeric type, got $dataType",
+            line = None,
+            startPosition = None,
+            cause = None,
+            errorClass = None,
+            messageParameters = Map.empty,
+            context = Array.empty
+          )
+        }
     }
-    if (!spark.experimental.extraStrategies.contains(PITRule)) {
-      spark.experimental.extraOptimizations =
-        spark.experimental.extraOptimizations :+ PITRule
-    }
+
+    val logicalPlan = PITJoin(
+      left.queryExecution.analyzed,
+      right.queryExecution.analyzed,
+      leftPitExpression,
+      rightPitExpression,
+      parsedJoinType == LeftOuter,
+      tolerance,
+      joinExprs.map(toExpression(_))
+    )
+    // Copying `Dataset.ofRows()`, but using a public constructor for DataFrame (Dataset[Row]).
+    new DataFrame(
+      sparkSession,
+      logicalPlan,
+      RowEncoder.encoderFor(logicalPlan.schema)
+    )
   }
+}
 
-  // For the PySpark API
-  def getPit: UserDefinedFunction = pit
+class SparkPIT extends SparkSessionExtensionsProvider {
+  override def apply(extensions: SparkSessionExtensions): Unit = {
+    extensions.injectPlannerStrategy(session => CustomStrategy)
+  }
 }

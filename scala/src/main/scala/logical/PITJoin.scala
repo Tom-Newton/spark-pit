@@ -42,26 +42,17 @@ protected[pit] case object PITJoinType extends CustomJoinType {
   override def sql: String = "PIT"
 }
 
+// Based on org.apache.spark.sql.catalyst.plans.logical.Join
 protected[pit] case class PITJoin(
     left: LogicalPlan,
     right: LogicalPlan,
-    pitCondition: Expression,
+    leftPitKey: Expression,
+    rightPitKey: Expression,
     returnNulls: Boolean,
     tolerance: Long,
     condition: Option[Expression]
 ) extends BinaryNode
     with PredicateHelper {
-
-  // Joins are only resolved if they don't introduce ambiguous expression ids.
-  override lazy val resolved: Boolean = {
-    childrenResolved &&
-    expressions.forall(_.resolved) &&
-    duplicateResolved &&
-    condition.forall(_.dataType == BooleanType)
-  }
-  override protected lazy val validConstraints: ExpressionSet = {
-    left.constraints
-  }
 
   override def maxRows: Option[Long] = {
     left.maxRows
@@ -79,8 +70,22 @@ protected[pit] case class PITJoin(
     children.flatMap(_.metadataOutput)
   }
 
+
+  override protected lazy val validConstraints: ExpressionSet = {
+    left.constraints
+  }
+
   def duplicateResolved: Boolean =
     left.outputSet.intersect(right.outputSet).isEmpty
+
+
+  // Joins are only resolved if they don't introduce ambiguous expression ids.
+  override lazy val resolved: Boolean = {
+    childrenResolved &&
+    expressions.forall(_.resolved) &&
+    duplicateResolved &&
+    condition.forall(_.dataType == BooleanType)
+  }
 
   override protected def withNewChildrenInternal(
       newLeft: LogicalPlan,

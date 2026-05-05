@@ -24,7 +24,7 @@
 
 package io.github.ackuq.pit
 
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.classic.SparkSession
 
 trait SparkSessionTestWrapper {
   val spark: SparkSession = SparkSession
@@ -33,5 +33,8 @@ trait SparkSessionTestWrapper {
     .appName("Spark PIT Tests")
     .config("spark.ui.showConsoleProgress", value = false)
     .config("spark.sql.shuffle.partitions", 1)
+    .config("spark.sql.extensions", "io.github.ackuq.pit.SparkPIT")
     .getOrCreate()
+
+  spark.sparkContext.setLogLevel("ERROR")
 }
