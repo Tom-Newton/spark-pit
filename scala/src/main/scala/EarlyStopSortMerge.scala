@@ -24,6 +24,7 @@
 
 package io.github.ackuq.pit
 
+import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.Column
 import org.apache.spark.sql.SparkSessionExtensions
 import org.apache.spark.sql.SparkSessionExtensionsProvider
@@ -33,7 +34,6 @@ import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.classic.DataFrame
 import org.apache.spark.sql.types.NumericType
-
 import execution.CustomStrategy
 import logical.PITJoin
 
@@ -103,8 +103,14 @@ object EarlyStopSortMerge {
     Seq("left" -> leftPitExpression.dataType, "right" -> rightPitExpression.dataType).foreach {
       case (side, dataType) =>
         if (!dataType.isInstanceOf[NumericType]) {
-          throw new IllegalArgumentException(
-            s"PIT key on $side side must be a numeric type, got $dataType"
+          throw new AnalysisException(
+            message = s"PIT key on $side side must be a numeric type, got $dataType",
+            line = None,
+            startPosition = None,
+            cause = None,
+            errorClass = None,
+            messageParameters = Map.empty,
+            context = Array.empty
           )
         }
     }
