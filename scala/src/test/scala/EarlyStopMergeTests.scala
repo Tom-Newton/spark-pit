@@ -26,7 +26,7 @@ package io.github.ackuq.pit
 
 import org.apache.spark.sql.classic.DataFrame
 import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
-import org.apache.spark.sql.functions.{col, lit}
+import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.types.StructType
 import org.scalatest.flatspec.AnyFlatSpec
 
