@@ -24,14 +24,14 @@
 
 package io.github.ackuq.pit
 
-import org.apache.spark.sql.{
-  Column,
-  SparkSessionExtensionsProvider,
-  SparkSessionExtensions
-}
-import org.apache.spark.sql.classic.DataFrame
+import org.apache.spark.sql.Column
+import org.apache.spark.sql.SparkSessionExtensions
+import org.apache.spark.sql.SparkSessionExtensionsProvider
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import org.apache.spark.sql.catalyst.plans.{Inner, LeftOuter, JoinType}
+import org.apache.spark.sql.catalyst.plans.Inner
+import org.apache.spark.sql.catalyst.plans.JoinType
+import org.apache.spark.sql.catalyst.plans.LeftOuter
+import org.apache.spark.sql.classic.DataFrame
 import org.apache.spark.sql.types.NumericType
 
 import execution.CustomStrategy
@@ -101,10 +101,10 @@ object EarlyStopSortMerge {
     val rightPitExpression = toExpression(rightPitColumn)
 
     Seq("left" -> leftPitExpression.dataType, "right" -> rightPitExpression.dataType).foreach {
-      case (side, dt) =>
-        if (!dt.isInstanceOf[NumericType]) {
+      case (side, dataType) =>
+        if (!dataType.isInstanceOf[NumericType]) {
           throw new IllegalArgumentException(
-            s"PIT key on $side side must be a numeric type, got $dt"
+            s"PIT key on $side side must be a numeric type, got $dataType"
           )
         }
     }
