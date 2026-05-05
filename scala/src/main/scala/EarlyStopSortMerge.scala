@@ -42,15 +42,15 @@ object EarlyStopSortMerge {
   def joinPIT(
       left: DataFrame,
       right: DataFrame,
-      leftPitExpression: Column,
-      rightPitExpression: Column,
+      leftPitColumn: Column,
+      rightPitColumn: Column,
       joinType: String,
       tolerance: Long
   ): DataFrame = joinPIT(
     left,
     right,
-    leftPitExpression,
-    rightPitExpression,
+    leftPitColumn,
+    rightPitColumn,
     None,
     joinType,
     tolerance
@@ -59,16 +59,16 @@ object EarlyStopSortMerge {
   def joinPIT(
       left: DataFrame,
       right: DataFrame,
-      leftPitExpression: Column,
-      rightPitExpression: Column,
+      leftPitColumn: Column,
+      rightPitColumn: Column,
       joinExprs: Column,
       joinType: String,
       tolerance: Long
   ): DataFrame = joinPIT(
     left,
     right,
-    leftPitExpression,
-    rightPitExpression,
+    leftPitColumn,
+    rightPitColumn,
     Some(joinExprs),
     joinType,
     tolerance
@@ -77,8 +77,8 @@ object EarlyStopSortMerge {
   def joinPIT(
       left: DataFrame,
       right: DataFrame,
-      leftPitExpression: Column,
-      rightPitExpression: Column,
+      leftPitColumn: Column,
+      rightPitColumn: Column,
       joinExprs: Option[Column],
       joinType: String,
       tolerance: Long
@@ -93,9 +93,14 @@ object EarlyStopSortMerge {
         )
     }
 
-    val leftPitType = left.select(leftPitExpression).schema.head.dataType
-    val rightPitType = right.select(rightPitExpression).schema.head.dataType
-    Seq("left" -> leftPitType, "right" -> rightPitType).foreach {
+
+    val sparkSession = left.sparkSession
+    def toExpression(column: Column) = sparkSession.expression(column)
+
+    val leftPitExpression = toExpression(leftPitColumn)
+    val rightPitExpression = toExpression(rightPitColumn)
+
+    Seq("left" -> leftPitExpression.dataType, "right" -> rightPitExpression.dataType).foreach {
       case (side, dt) =>
         if (!dt.isInstanceOf[NumericType]) {
           throw new IllegalArgumentException(
@@ -104,14 +109,11 @@ object EarlyStopSortMerge {
         }
     }
 
-    val sparkSession = left.sparkSession
-    def toExpression(column: Column) = sparkSession.expression(column)
-
     val logicalPlan = PITJoin(
       left.queryExecution.analyzed,
       right.queryExecution.analyzed,
-      toExpression(leftPitExpression),
-      toExpression(rightPitExpression),
+      leftPitExpression,
+      rightPitExpression,
       parsedJoinType == LeftOuter,
       tolerance,
       joinExprs.map(toExpression(_))
