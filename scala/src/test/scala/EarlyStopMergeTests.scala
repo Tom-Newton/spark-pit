@@ -26,7 +26,7 @@ package io.github.ackuq.pit
 
 import org.apache.spark.sql.classic.DataFrame
 import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
-import org.apache.spark.sql.functions.lit
+import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.types.StructType
 import org.scalatest.flatspec.AnyFlatSpec
 
@@ -465,16 +465,24 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     val fg1 = smallData.fg1
     val fg2 = smallData.fg2
 
-    val fg1StringTs = fg1.withColumn("ts", fg1("ts").cast("string"))
-    val fg2StringTs = fg2.withColumn("ts", fg2("ts").cast("string"))
-
     intercept[Exception] {
       val pitJoin = joinPIT(
-        fg1StringTs,
-        fg2StringTs,
-        fg1StringTs("ts"),
-        fg2StringTs("ts"),
-        fg1StringTs("id") === fg2StringTs("id"),
+        fg1,
+        fg2,
+        fg1("ts"),
+        fg2("ts").cast("string"),
+        fg1("id") === fg2("id"),
+        "inner",
+        0,
+      )
+    }
+    intercept[Exception] {
+      val pitJoin = joinPIT(
+        fg1,
+        fg2,
+        fg1("ts").cast("string"),
+        fg2("ts"),
+        fg1("id") === fg2("id"),
         "inner",
         0,
       )
