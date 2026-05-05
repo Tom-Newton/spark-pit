@@ -461,6 +461,30 @@ class EarlyStopMergeTests extends AnyFlatSpec with SparkSessionTestWrapper {
     testJoiningThreeDataframes("left", smallData.PIT_3_OUTER_schema)
   }
 
+  def testFailNonNumericPITKeys() {
+    val fg1 = smallData.fg1
+    val fg2 = smallData.fg2
+
+    val fg1StringTs = fg1.withColumn("ts", fg1("ts").cast("string"))
+    val fg2StringTs = fg2.withColumn("ts", fg2("ts").cast("string"))
+
+    intercept[Exception] {
+      val pitJoin = joinPIT(
+        fg1StringTs,
+        fg2StringTs,
+        fg1StringTs("ts"),
+        fg2StringTs("ts"),
+        fg1StringTs("id") === fg2StringTs("id"),
+        "inner",
+        0,
+      )
+    }
+  }
+
+  testBothCodegenAndInterpreted("fail_for_non_long_pit_key_type") {
+    testFailNonNumericPITKeys()
+  }
+
   testBothCodegenAndInterpreted("fail_during_planning_for_non_equi_condition") {
     val fg1 = smallData.fg1
     val fg2 = smallData.fg2

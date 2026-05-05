@@ -32,6 +32,7 @@ import org.apache.spark.sql.{
 import org.apache.spark.sql.classic.DataFrame
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.plans.{Inner, LeftOuter, JoinType}
+import org.apache.spark.sql.types.NumericType
 
 import execution.CustomStrategy
 import logical.PITJoin
@@ -90,6 +91,17 @@ object EarlyStopSortMerge {
         throw new IllegalArgumentException(
           s"Join type $x not supported for PIT joins"
         )
+    }
+
+    val leftPitType = left.select(leftPitExpression).schema.head.dataType
+    val rightPitType = right.select(rightPitExpression).schema.head.dataType
+    Seq("left" -> leftPitType, "right" -> rightPitType).foreach {
+      case (side, dt) =>
+        if (!dt.isInstanceOf[NumericType]) {
+          throw new IllegalArgumentException(
+            s"PIT key on $side side must be a numeric type, got $dt"
+          )
+        }
     }
 
     val sparkSession = left.sparkSession
