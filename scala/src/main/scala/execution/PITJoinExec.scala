@@ -593,7 +593,7 @@ protected[pit] case class PITJoinExec(
     }
   }
 
-  override def needCopyResult: Boolean = true
+  override def needCopyResult(ctx: CodegenContext): String = "true"
 
   override protected def withNewChildrenInternal(
       newLeft: SparkPlan,
